@@ -1,0 +1,8 @@
+# Zeilenenden normalisieren: Textdateien immer mit LF speichern,
+# damit Shell-/Python-Skripte auf dem Raspberry Pi (Linux) funktionieren.
+* text=auto eol=lf
+
+# Binärdateien nicht anfassen
+*.png binary
+*.jpg binary
+*.jpeg binary
