@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fotobox – Galerie</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, sans-serif; background: #111; color: #fff; }
+  header { padding: 18px; text-align: center; background: #1b1b1b; position: sticky; top: 0; }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 4px 0 0; font-size: 13px; color: #aaa; }
+  .grid {
+    display: grid; gap: 8px; padding: 8px;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+  .grid a { display: block; aspect-ratio: 1; overflow: hidden; border-radius: 8px; background: #000; }
+  .grid img { width: 100%; height: 100%; object-fit: cover; }
+  .empty { text-align: center; padding: 60px 20px; color: #888; }
+  /* Lightbox */
+  #lb { position: fixed; inset: 0; background: rgba(0,0,0,.95); display: none;
+        flex-direction: column; align-items: center; justify-content: center; z-index: 10; }
+  #lb img { max-width: 96vw; max-height: 82vh; border-radius: 8px; }
+  #lb .bar { margin-top: 14px; display: flex; gap: 12px; }
+  #lb a, #lb button { padding: 12px 20px; border-radius: 10px; border: none;
+        font-size: 16px; cursor: pointer; background: #2980b9; color: #fff; text-decoration: none; }
+  #lb button { background: #444; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📸 Fotobox-Galerie</h1>
+  <p>Tippe auf ein Bild zum Anschauen & Herunterladen</p>
+</header>
+
+{% if photos %}
+<div class="grid">
+  {% for p in photos %}
+  <a href="#" onclick="open_lb('{{ p }}'); return false;">
+    <img loading="lazy" src="/thumb/{{ p }}" alt="">
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty">Noch keine Fotos – los geht's! 🎉</div>
+{% endif %}
+
+<div id="lb">
+  <img id="lb-img" src="" alt="">
+  <div class="bar">
+    <a id="lb-dl" href="" download>⬇ Herunterladen</a>
+    <button onclick="document.getElementById('lb').style.display='none'">Schließen</button>
+  </div>
+</div>
+
+<script>
+function open_lb(name) {
+  document.getElementById('lb-img').src = '/photos/' + name;
+  document.getElementById('lb-dl').href = '/photos/' + name;
+  document.getElementById('lb').style.display = 'flex';
+}
+// alle 10s nach neuen Fotos schauen
+setInterval(async () => {
+  try {
+    const r = await fetch('/api/photos');
+    const d = await r.json();
+    if (d.photos.length !== document.querySelectorAll('.grid img').length) {
+      location.reload();
+    }
+  } catch (e) {}
+}, 10000);
+</script>
+</body>
+</html>

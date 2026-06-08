@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Fotobox</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: system-ui, sans-serif; background: #000; color: #fff;
+    overflow: hidden; user-select: none;
+  }
+  .screen { position: fixed; inset: 0; display: none; }
+  .screen.active { display: flex; }
+
+  /* ---------- Screen 1: Liveview ---------- */
+  #live { flex-direction: column; }
+  #feed-wrap {
+    flex: 1; position: relative; background: #000; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #feed { width: 100%; height: 100%; object-fit: contain; }
+  #status {
+    position: absolute; top: 14px; left: 14px; font-size: 14px;
+    background: rgba(0,0,0,.5); padding: 6px 12px; border-radius: 20px;
+  }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:50%;
+         margin-right:6px; vertical-align:middle; }
+  .ok { background:#2ecc71; } .bad { background:#e74c3c; }
+  #qr-mini {
+    position: absolute; top: 14px; right: 14px; background:#fff;
+    padding:6px; border-radius:8px; text-align:center;
+  }
+  #qr-mini img { display:block; width:90px; height:90px; }
+  #qr-mini span { color:#222; font-size:10px; }
+
+  .controls {
+    padding: 18px; display: flex; align-items: center; justify-content: center;
+    gap: 28px; background: #111;
+  }
+  .timers { display: flex; gap: 10px; }
+  .timers button {
+    padding: 12px 16px; font-size: 17px; border-radius: 12px; border: 2px solid #444;
+    background: #1d1d1d; color: #fff; cursor: pointer;
+  }
+  .timers button.active { border-color: #e74c3c; background: #3a1f1f; }
+  #shutter {
+    width: 110px; height: 110px; border-radius: 50%; border: 6px solid #fff;
+    background: #e74c3c; color: #fff; font-size: 20px; font-weight: 700;
+    box-shadow: 0 6px 24px rgba(231,76,60,.5); cursor: pointer; transition: transform .1s;
+  }
+  #shutter:active { transform: scale(.93); }
+  #shutter:disabled { background:#555; border-color:#777; box-shadow:none; }
+
+  /* ---------- Screen 2: Ergebnis ---------- */
+  #result { flex-direction: row; }
+  #result .photo {
+    flex: 1; background:#000; display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  #result .photo img { max-width:100%; max-height:100%; border-radius:10px; }
+  #result .side {
+    width: 360px; background:#1b1b1b; padding:32px 24px; display:flex;
+    flex-direction:column; align-items:center; justify-content:center; gap:22px; text-align:center;
+  }
+  #result .side h2 { margin:0; font-size:22px; }
+  #result .side .qrbox { background:#fff; padding:14px; border-radius:14px; }
+  #result .side .qrbox img { display:block; width:230px; height:230px; }
+  #result .side p { margin:0; color:#bbb; font-size:15px; line-height:1.4; }
+  #next {
+    padding: 20px 30px; font-size: 22px; font-weight:700; border:none; border-radius:14px;
+    background:#27ae60; color:#fff; cursor:pointer; width:100%;
+  }
+  #next:active { transform: scale(.97); }
+
+  /* ---------- Overlays ---------- */
+  #overlay { position: fixed; inset: 0; background: rgba(0,0,0,.75);
+    display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 20; }
+  #count { font-size: 220px; font-weight: 800; text-shadow:0 4px 30px rgba(0,0,0,.8); }
+  #cheese { display:none; text-align:center; }
+  #cheese .big { font-size: 130px; font-weight: 800; color:#ffd23f;
+    text-shadow:0 4px 30px rgba(0,0,0,.8); animation: pulse 0.9s ease-in-out infinite; }
+  #cheese .sub { font-size: 34px; margin-top: 10px; color:#fff; }
+  #cheese .dots::after { content:''; animation: dots 1.2s steps(4,end) infinite; }
+  @keyframes pulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.08);} }
+  @keyframes dots { 0%{content:'';} 25%{content:'.';} 50%{content:'..';} 75%{content:'...';} }
+  #flash { position: fixed; inset: 0; background:#fff; opacity:0; pointer-events:none;
+    z-index:30; transition: opacity .08s; }
+  #msg { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background:#c0392b; padding:12px 20px; border-radius:10px; font-size:16px;
+    display:none; z-index:40; }
+</style>
+</head>
+<body>
+
+<!-- Screen 1: Liveview -->
+<div id="live" class="screen active">
+  <div id="feed-wrap">
+    <img id="feed" src="" alt="Liveview">
+    <div id="status"><span class="dot bad"></span>…</div>
+    <a id="qr-mini" href="/galerie" target="_blank">
+      <img src="/qr.png" alt="QR"><span>Alle Fotos</span>
+    </a>
+  </div>
+  <div class="controls">
+    <div class="timers">
+      <button data-t="0" class="active">Sofort</button>
+      <button data-t="3">3s</button>
+      <button data-t="5">5s</button>
+      <button data-t="10">10s</button>
+    </div>
+    <button id="shutter">FOTO</button>
+  </div>
+</div>
+
+<!-- Screen 2: Ergebnis -->
+<div id="result" class="screen">
+  <div class="photo"><img id="shot" src="" alt="Foto"></div>
+  <div class="side">
+    <h2>📸 Dein Foto!</h2>
+    <div class="qrbox"><img id="qr-photo" src="" alt="QR zum Foto"></div>
+    <p>QR-Code scannen,<br>um dein Foto aufs Handy zu laden</p>
+    <button id="next">Nächstes Foto ▶</button>
+  </div>
+</div>
+
+<div id="overlay">
+  <div id="count">3</div>
+  <div id="cheese">
+    <div class="big">📸 Cheeese!</div>
+    <div class="sub">Bitte stillhalten & lächeln<span class="dots"></span></div>
+  </div>
+</div>
+<div id="flash"></div>
+<div id="msg"></div>
+
+<script>
+let timer = 0;
+const $ = id => document.getElementById(id);
+const feed = $('feed'), shutter = $('shutter');
+const liveScreen = $('live'), resultScreen = $('result');
+
+function startFeed() { feed.src = '/preview.mjpg?t=' + Date.now(); }
+function stopFeed()  { feed.src = ''; }   // schliesst den MJPEG-Stream
+
+document.querySelectorAll('.timers button').forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll('.timers button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    timer = parseInt(b.dataset.t);
+  };
+});
+
+function showMsg(t){ const m=$('msg'); m.textContent=t; m.style.display='block';
+  setTimeout(()=>m.style.display='none',5000); }
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function showOverlayCount(){ $('overlay').style.display='flex'; $('cheese').style.display='none'; $('count').style.display='block'; }
+function showCheese(){ $('overlay').style.display='flex'; $('count').style.display='none'; $('cheese').style.display='block'; }
+function hideOverlay(){ $('overlay').style.display='none'; }
+
+async function countdown(sec){
+  if (sec<=0) return;
+  showOverlayCount();
+  for (let i=sec;i>0;i--){ $('count').textContent=i; await sleep(1000); }
+}
+
+function showResult(data){
+  $('shot').src = data.url + '?t=' + Date.now();
+  $('qr-photo').src = '/qr.png?url=' + encodeURIComponent(data.view);
+  stopFeed();
+  liveScreen.classList.remove('active');
+  resultScreen.classList.add('active');
+}
+
+function backToLive(){
+  resultScreen.classList.remove('active');
+  liveScreen.classList.add('active');
+  startFeed();
+}
+
+async function trigger(){
+  shutter.disabled = true;
+  try {
+    await countdown(timer);
+    $('flash').style.opacity='0.9';
+    setTimeout(()=>$('flash').style.opacity='0',120);
+    showCheese();                          // bleibt stehen, bis die Kamera fertig ist
+    const r = await fetch('/capture',{method:'POST'});
+    const d = await r.json();
+    hideOverlay();
+    if (d.ok) showResult(d);
+    else showMsg('Fehler: ' + d.error);
+  } catch(e){
+    hideOverlay();
+    showMsg('Verbindungsfehler: ' + e);
+  } finally {
+    shutter.disabled = false;
+  }
+}
+
+shutter.onclick = trigger;
+$('next').onclick = backToLive;
+
+async function refreshStatus(){
+  try {
+    const d = await (await fetch('/api/status')).json();
+    const el = $('status');
+    if (d.camera){ el.innerHTML='<span class="dot ok"></span>Bereit · '+d.count+' Fotos'; }
+    else { el.innerHTML='<span class="dot bad"></span>Kamera startet…'; }
+  } catch(e){}
+}
+refreshStatus(); setInterval(refreshStatus, 4000);
+startFeed();
+// Falls der Stream mal abreisst: alle 15s neu verbinden, wenn Screen 1 aktiv
+feed.onerror = () => { if (liveScreen.classList.contains('active')) setTimeout(startFeed, 1500); };
+</script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+
+# --- Fotobox-Laufzeitdaten (NICHT ins Repo!) ---
+photos/                 # aufgenommene Fotos (privat + gross)
+static/thumbs/          # generierte Vorschaubilder
+public_url.txt          # wechselnde Cloudflare-Tunnel-URL
+app.log
+
+# --- Backups / temporaere Kopien ---
+backup_*/
+*.bak
+
+# --- lokale Test-/Beispieldateien ---
+probefoto.jpg
+
+# --- OS / Editor ---
+.DS_Store
+Thumbs.db
+.vscode/

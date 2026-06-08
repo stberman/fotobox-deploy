@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fotobox – Dein Foto</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, sans-serif; background:#111; color:#fff;
+         min-height:100vh; display:flex; flex-direction:column; align-items:center; }
+  header { padding:16px; font-size:18px; }
+  .img { width:100%; max-width:700px; padding:0 12px; }
+  .img img { width:100%; border-radius:10px; }
+  .bar { display:flex; gap:12px; padding:16px; flex-wrap:wrap; justify-content:center; }
+  a.btn { padding:14px 24px; border-radius:12px; font-size:17px; text-decoration:none;
+          color:#fff; background:#2980b9; }
+  a.btn.alt { background:#444; }
+  p.hint { color:#aaa; font-size:14px; padding:0 16px 24px; text-align:center; }
+</style>
+</head>
+<body>
+  <header>📸 Dein Fotobox-Bild</header>
+  <div class="img"><img src="/photos/{{ filename }}" alt="Foto"></div>
+  <div class="bar">
+    <a class="btn" href="/photos/{{ filename }}" download>⬇ Herunterladen</a>
+    <a class="btn alt" href="/galerie">Alle Fotos</a>
+  </div>
+  <p class="hint">Tipp: Auf dem Handy lange aufs Bild tippen → „Bild sichern".</p>
+</body>
+</html>

@@ -1,0 +1,14 @@
+[Unit]
+Description=Fotobox Flask App (Raspberry Pi + Canon EOS M50)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=admin
+WorkingDirectory=/home/admin/fotobox
+ExecStart=/home/admin/fotobox/venv/bin/python /home/admin/fotobox/app.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
