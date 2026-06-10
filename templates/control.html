@@ -54,22 +54,24 @@
   #shutter:disabled { background:#555; border-color:#777; box-shadow:none; }
 
   /* ---------- Screen 2: Ergebnis ---------- */
-  #result { flex-direction: row; }
+  #result { flex-direction: column; }
   #result .photo {
-    flex: 1; background:#000; display:flex; align-items:center; justify-content:center; padding:20px;
+    flex: 1; min-height: 0; background:#000;
+    display:flex; align-items:center; justify-content:center; padding:16px 16px 8px;
   }
   #result .photo img { max-width:100%; max-height:100%; border-radius:10px; }
   #result .side {
-    width: 360px; background:#1b1b1b; padding:32px 24px; display:flex;
-    flex-direction:column; align-items:center; justify-content:center; gap:22px; text-align:center;
+    width: 100%; background:#1b1b1b; padding:16px 24px; display:flex;
+    flex-direction:row; align-items:center; justify-content:center; gap:28px; text-align:left;
   }
-  #result .side h2 { margin:0; font-size:22px; }
-  #result .side .qrbox { background:#fff; padding:14px; border-radius:14px; }
-  #result .side .qrbox img { display:block; width:230px; height:230px; }
+  #result .side .txt { display:flex; flex-direction:column; gap:6px; }
+  #result .side h2 { margin:0; font-size:20px; }
+  #result .side .qrbox { background:#fff; padding:10px; border-radius:12px; }
+  #result .side .qrbox img { display:block; width:150px; height:150px; }
   #result .side p { margin:0; color:#bbb; font-size:15px; line-height:1.4; }
   #next {
-    padding: 20px 30px; font-size: 22px; font-weight:700; border:none; border-radius:14px;
-    background:#27ae60; color:#fff; cursor:pointer; width:100%;
+    padding: 18px 30px; font-size: 22px; font-weight:700; border:none; border-radius:14px;
+    background:#27ae60; color:#fff; cursor:pointer; white-space:nowrap;
   }
   #next:active { transform: scale(.97); }
 
@@ -117,9 +119,11 @@
 <div id="result" class="screen">
   <div class="photo"><img id="shot" src="" alt="Foto"></div>
   <div class="side">
-    <h2>📸 Dein Foto!</h2>
     <div class="qrbox"><img id="qr-photo" src="" alt="QR zum Foto"></div>
-    <p>QR-Code scannen,<br>um dein Foto aufs Handy zu laden</p>
+    <div class="txt">
+      <h2>📸 Dein Foto!</h2>
+      <p>QR-Code scannen, um dein Foto aufs Handy zu laden</p>
+    </div>
     <button id="next">Nächstes Foto ▶</button>
   </div>
 </div>

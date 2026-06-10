@@ -7,6 +7,8 @@ steckt in camera.py, die Konstanten in config.py.
 """
 import io
 import os
+import zipfile
+from datetime import datetime
 
 from flask import (Flask, Response, jsonify, render_template, request,
                    send_from_directory, send_file, abort)
@@ -123,12 +125,83 @@ def api_status():
     return jsonify(camera=cam.is_live(), count=len(list_photos()))
 
 
+class _ZipSink:
+    """Schreib-Senke fuer zipfile: sammelt Bytes, die der Generator abholt.
+
+    Hat bewusst kein seek()/tell(), damit zipfile den Stream als nicht-seekbar
+    behandelt (Data-Descriptors) und nichts zurueckspulen will.
+    """
+    def __init__(self):
+        self._buf = bytearray()
+
+    def write(self, data):
+        self._buf += data
+        return len(data)
+
+    def flush(self):
+        pass
+
+    def drain(self):
+        chunk = bytes(self._buf)
+        del self._buf[:]
+        return chunk
+
+
+@app.route("/download-all")
+def download_all():
+    # Nur im LAN erreichbar (nicht in PUBLIC_PREFIXES -> Tunnel bekommt 403).
+    photos = list_photos()
+    if not photos:
+        abort(404)
+
+    def generate():
+        sink = _ZipSink()
+        # ZIP_STORED: JPEGs sind bereits komprimiert -> keine CPU fuer Deflate.
+        with zipfile.ZipFile(sink, "w", zipfile.ZIP_STORED) as zf:
+            for name in photos:
+                zf.write(os.path.join(config.PHOTO_DIR, name), arcname=name)
+                chunk = sink.drain()      # nach jeder Datei ausliefern -> RAM bleibt klein
+                if chunk:
+                    yield chunk
+        tail = sink.drain()               # zentrales Verzeichnis am Ende
+        if tail:
+            yield tail
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return Response(generate(), mimetype="application/zip",
+                    headers={"Content-Disposition":
+                             f'attachment; filename="fotobox_{ts}.zip"'})
+
+
+@app.route("/delete", methods=["POST"])
+def delete_photo():
+    # Nur im LAN erreichbar (nicht in PUBLIC_PREFIXES -> Tunnel bekommt 403).
+    filename = request.form.get("filename", "")
+    # Abgleich mit der echten Fotoliste verhindert Path-Traversal/Fremdzugriff.
+    if filename not in list_photos():
+        abort(404)
+    try:
+        os.remove(os.path.join(config.PHOTO_DIR, filename))
+    except OSError as e:
+        return jsonify(ok=False, error=str(e)), 500
+    thumb = os.path.join(config.THUMB_DIR, filename)
+    if os.path.exists(thumb):
+        try:
+            os.remove(thumb)
+        except OSError:
+            pass        # Thumbnail wird sonst beim naechsten Aufruf neu erzeugt
+    return jsonify(ok=True)
+
+
 # --------------------------------------------------------------------------
 # Routen: oeffentlich (LAN + Tunnel)
 # --------------------------------------------------------------------------
 @app.route("/galerie")
 def galerie():
-    return render_template("gallery.html", photos=list_photos())
+    # is_lan steuert, ob der Loeschen-Button angezeigt wird (nur Bedien-Tablet,
+    # nicht Gaeste ueber den Tunnel).
+    return render_template("gallery.html", photos=list_photos(),
+                           is_lan=is_lan_request())
 
 
 @app.route("/foto/<path:filename>")

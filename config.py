@@ -20,6 +20,7 @@ PUBLIC_PREFIXES = ("/galerie", "/foto/", "/photos/", "/thumb/", "/qr.png",
                    "/api/photos", "/static/")
 
 # --- Kamera / Liveview ---------------------------------------------------
+STREAM_MAX_FPS = 15              # Obergrenze fuer an den Browser gesendete Frames (0 = unbegrenzt)
 LIVEVIEW_READ_CHUNK = 65536      # Bytes pro stdout-Read (groesser = weniger Syscalls)
 CAPTURE_TIMEOUT = 60             # s Zeitlimit fuer eine Vollbild-Aufnahme
 LIVE_FRESH_SECONDS = 4.0         # Frame juenger als das => Kamera gilt als "live"

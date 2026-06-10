@@ -127,13 +127,24 @@ class CameraManager:
         gar kein Frame empfangen wurde.
         """
         timeout = config.STREAM_WAIT_TIMEOUT if timeout is None else timeout
+        min_interval = 1.0 / config.STREAM_MAX_FPS if config.STREAM_MAX_FPS else 0
         last = -1
+        last_sent = 0.0
         while not self._stop:
             with self._cond:
                 self._cond.wait_for(lambda: self._frame_ctr != last,
                                     timeout=timeout)
                 frame = self._frame
-                last = self._frame_ctr
+                ctr = self._frame_ctr
+            now = time.monotonic()
+            # Framerate drosseln: neue Frames, die zu schnell aufeinander folgen,
+            # ueberspringen (immer der neueste wird gesendet). Bei Timeout bleibt
+            # ctr == last -> letzter Frame als Keepalive, nicht gedrosselt.
+            if ctr != last and min_interval and (now - last_sent) < min_interval:
+                last = ctr
+                continue
+            last = ctr
+            last_sent = now
             yield frame
 
     def is_live(self):
