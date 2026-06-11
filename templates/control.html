@@ -34,6 +34,11 @@
   }
   #qr-mini img { display:block; width:90px; height:90px; }
   #qr-mini span { color:#222; font-size:10px; }
+  #zoom { position: absolute; bottom: 14px; right: 14px; display: flex; gap: 8px; z-index: 5; }
+  #zoom button {
+    width: 46px; height: 46px; border-radius: 50%; border: none; line-height: 1;
+    background: rgba(0,0,0,.55); color: #fff; font-size: 26px; font-weight: 700; cursor: pointer;
+  }
 
   .controls {
     padding: 18px; display: flex; align-items: center; justify-content: center;
@@ -113,6 +118,10 @@
     <a id="qr-mini" href="/galerie" target="_blank">
       <img src="/qr.png" alt="QR"><span>Alle Fotos</span>
     </a>
+    <div id="zoom">
+      <button id="zoom-out" title="Verkleinern">−</button>
+      <button id="zoom-in" title="Vergrößern">+</button>
+    </div>
   </div>
   <div class="controls">
     <div class="timers">
@@ -153,18 +162,21 @@
 <script>
 let timer = 0;
 let liveRotation = 0;   // Grad, im Uhrzeigersinn, fuer Liveview + naechste Aufnahme
+let liveZoom = 1;       // reine Vorschau-Vergroesserung (wirkt NICHT aufs Foto)
 const $ = id => document.getElementById(id);
 const feed = $('feed'), shutter = $('shutter');
 const liveScreen = $('live'), resultScreen = $('result');
 
-function applyLiveRotation(){
-  feed.style.transform = 'rotate(' + liveRotation + 'deg)';
+function applyFeedTransform(){
+  feed.style.transform = 'rotate(' + liveRotation + 'deg) scale(' + liveZoom + ')';
   $('live-rotate').classList.toggle('on', liveRotation !== 0);
 }
 $('live-rotate').onclick = () => {
   liveRotation = (liveRotation + 90) % 360;
-  applyLiveRotation();
+  applyFeedTransform();
 };
+$('zoom-in').onclick  = () => { liveZoom = Math.min(liveZoom + 0.1, 3); applyFeedTransform(); };
+$('zoom-out').onclick = () => { liveZoom = Math.max(liveZoom - 0.1, 1); applyFeedTransform(); };
 
 // Wendet die Liveview-Drehung auf die frisch aufgenommene Datei an (je 90 Grad).
 async function applyCaptureRotation(filename){
