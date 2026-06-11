@@ -193,6 +193,33 @@ def delete_photo():
     return jsonify(ok=True)
 
 
+@app.route("/rotate", methods=["POST"])
+def rotate_photo():
+    # Nur im LAN erreichbar (nicht in PUBLIC_PREFIXES -> Tunnel bekommt 403).
+    filename = request.form.get("filename", "")
+    if filename not in list_photos():
+        abort(404)
+    path = os.path.join(config.PHOTO_DIR, filename)
+    try:
+        with Image.open(path) as img:
+            fmt = img.format
+            # ROTATE_270 = 90 Grad im Uhrzeigersinn; transpose() ist fuer
+            # 90-Grad-Schritte exakt (kein Interpolations-Verlust).
+            img.transpose(Image.Transpose.ROTATE_270).save(
+                path, format=fmt, quality=95)
+    except Exception as e:
+        return jsonify(ok=False, error=str(e)), 500
+    # Thumbnail verwerfen -> wird beim naechsten Abruf in neuer Lage erzeugt.
+    thumb = os.path.join(config.THUMB_DIR, filename)
+    if os.path.exists(thumb):
+        try:
+            os.remove(thumb)
+        except OSError:
+            pass
+    make_thumb(filename)
+    return jsonify(ok=True)
+
+
 # --------------------------------------------------------------------------
 # Routen: oeffentlich (LAN + Tunnel)
 # --------------------------------------------------------------------------
