@@ -83,10 +83,6 @@
     padding: 18px 24px; font-size: 18px; font-weight:700; border:none; border-radius:14px;
     background:#c0392b; color:#fff; cursor:pointer; white-space:nowrap;
   }
-  #rotate-shot {
-    padding: 18px 24px; font-size: 18px; font-weight:700; border:none; border-radius:14px;
-    background:#34495e; color:#fff; cursor:pointer; white-space:nowrap;
-  }
   #next:active { transform: scale(.97); }
 
   /* ---------- Overlays ---------- */
@@ -139,7 +135,6 @@
       <h2>📸 Dein Foto!</h2>
       <p>QR-Code scannen, um dein Foto aufs Handy zu laden</p>
     </div>
-    <button id="rotate-shot">🔄 Drehen</button>
     <button id="del-shot">🗑 Löschen</button>
     <button id="next">Nächstes Foto ▶</button>
   </div>
@@ -217,20 +212,6 @@ function showResult(data){
   resultScreen.classList.add('active');
 }
 
-async function rotateShot(){
-  if (!currentShot) return;
-  try {
-    const fd = new FormData();
-    fd.append('filename', currentShot);
-    const r = await fetch('/rotate', { method: 'POST', body: fd });
-    const d = await r.json();
-    if (d.ok) $('shot').src = '/photos/' + currentShot + '?t=' + Date.now();
-    else showMsg('Drehen fehlgeschlagen: ' + (d.error || 'unbekannt'));
-  } catch(e) {
-    showMsg('Fehler beim Drehen: ' + e);
-  }
-}
-
 async function deleteShot(){
   if (!currentShot) return;
   if (!confirm('Dieses Foto wirklich löschen?')) return;
@@ -283,7 +264,6 @@ async function trigger(){
 shutter.onclick = trigger;
 $('next').onclick = backToLive;
 $('del-shot').onclick = deleteShot;
-$('rotate-shot').onclick = rotateShot;
 
 async function refreshStatus(){
   try {
