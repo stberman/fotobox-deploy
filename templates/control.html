@@ -52,6 +52,12 @@
   }
   #shutter:active { transform: scale(.93); }
   #shutter:disabled { background:#555; border-color:#777; box-shadow:none; }
+  #feed { transition: transform .15s ease; }
+  #live-rotate {
+    width: 72px; height: 72px; border-radius: 50%; border: 3px solid #555;
+    background: #1d1d1d; color: #fff; font-size: 26px; cursor: pointer;
+  }
+  #live-rotate.on { border-color: #2980b9; background: #1f2d3a; }
 
   /* ---------- Screen 2: Ergebnis ---------- */
   #result { flex-direction: column; }
@@ -120,6 +126,7 @@
       <button data-t="10">10s</button>
     </div>
     <button id="shutter">FOTO</button>
+    <button id="live-rotate" title="Vorschau drehen">🔄</button>
   </div>
 </div>
 
@@ -150,9 +157,30 @@
 
 <script>
 let timer = 0;
+let liveRotation = 0;   // Grad, im Uhrzeigersinn, fuer Liveview + naechste Aufnahme
 const $ = id => document.getElementById(id);
 const feed = $('feed'), shutter = $('shutter');
 const liveScreen = $('live'), resultScreen = $('result');
+
+function applyLiveRotation(){
+  feed.style.transform = 'rotate(' + liveRotation + 'deg)';
+  $('live-rotate').classList.toggle('on', liveRotation !== 0);
+}
+$('live-rotate').onclick = () => {
+  liveRotation = (liveRotation + 90) % 360;
+  applyLiveRotation();
+};
+
+// Wendet die Liveview-Drehung auf die frisch aufgenommene Datei an (je 90 Grad).
+async function applyCaptureRotation(filename){
+  for (let i = 0; i < liveRotation / 90; i++){
+    const fd = new FormData();
+    fd.append('filename', filename);
+    const r = await fetch('/rotate', { method: 'POST', body: fd });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'unbekannt');
+  }
+}
 
 function startFeed() { feed.src = '/preview.mjpg?t=' + Date.now(); }
 function stopFeed()  { feed.src = ''; }   // schliesst den MJPEG-Stream
@@ -233,9 +261,17 @@ async function trigger(){
     showCheese();                          // bleibt stehen, bis die Kamera fertig ist
     const r = await fetch('/capture',{method:'POST'});
     const d = await r.json();
-    hideOverlay();
-    if (d.ok) showResult(d);
-    else showMsg('Fehler: ' + d.error);
+    if (d.ok) {
+      if (liveRotation) {
+        try { await applyCaptureRotation(d.filename); }
+        catch(e){ showMsg('Auto-Drehen fehlgeschlagen: ' + e); }
+      }
+      hideOverlay();
+      showResult(d);
+    } else {
+      hideOverlay();
+      showMsg('Fehler: ' + d.error);
+    }
   } catch(e){
     hideOverlay();
     showMsg('Verbindungsfehler: ' + e);
