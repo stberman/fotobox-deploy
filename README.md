@@ -33,12 +33,14 @@ Canon EOS M50 ──USB──> Raspberry Pi 5 ──WLAN──> Tablet / Handys
 ## Installation (auf dem Raspberry Pi)
 
 ```bash
-# 1. Systempakete
-sudo apt update && sudo apt install -y gphoto2 python3-venv
+# 1. Systempakete (python3-pil = Pillow vom System, gegen die System-Libs gebaut)
+sudo apt update && sudo apt install -y gphoto2 python3-venv python3-pil
 
 # 2. Projekt + virtuelle Umgebung
+#    --system-site-packages: damit das venv das System-Pillow (python3-pil) sieht.
+#    Pillow NICHT per pip installieren – siehe Hinweis in requirements.txt.
 cd ~/fotobox
-python3 -m venv venv
+python3 -m venv --system-site-packages venv
 ./venv/bin/pip install -r requirements.txt
 
 # 3. gvfs-Kamera-Monitor deaktivieren (sonst belegt der Desktop die Kamera)

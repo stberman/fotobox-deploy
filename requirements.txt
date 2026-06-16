@@ -1,3 +1,11 @@
 Flask==3.1.3
-Pillow==12.2.0
-qrcode[pil]==8.2
+qrcode==8.2
+
+# Pillow wird bewusst NICHT per pip installiert!
+# Das in den pip-Wheels gebuendelte liblzma (z.B. bei Pillow 12.2.0) ist auf
+# aktuellem Debian (glibc 2.41) inkompatibel -> "from PIL import Image" schlaegt
+# beim Start fehl. Stattdessen das gegen die System-Libs gebaute Paket nutzen:
+#     sudo apt install python3-pil
+# und das venv mit --system-site-packages anlegen (siehe README).
+# Darum oben auch 'qrcode' statt 'qrcode[pil]' - die Extra wuerde Pillow sonst
+# doch wieder per pip ins venv ziehen.
