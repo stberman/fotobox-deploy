@@ -27,3 +27,19 @@ LIVE_FRESH_SECONDS = 4.0         # Frame juenger als das => Kamera gilt als "liv
 SUPERVISOR_RETRY_OK = 0.5        # s Pause nach beendetem Liveview
 SUPERVISOR_RETRY_FAIL = 2.5      # s Pause, wenn keine Kamera/keine Frames
 STREAM_WAIT_TIMEOUT = 5.0        # s, die ein Stream auf einen neuen Frame wartet (Keepalive)
+
+# --- WLAN / Hotspot ------------------------------------------------------
+# Laufzeit-Zustand ausserhalb des Repos (vom Installer angelegt, gehoert dem Fotobox-User).
+STATE_DIR = "/var/lib/fotobox"
+AUTARK_FLAG = os.path.join(STATE_DIR, "autark")        # existiert => Autark-Modus an
+SCAN_CACHE = os.path.join(STATE_DIR, "scan.txt")       # letzter WLAN-Scan vor Hotspot-Start
+WIFI_ERROR_FILE = os.path.join(STATE_DIR, "last_error") # Fehlertext des letzten Verbindungsversuchs
+
+WIFI_IFACE = "wlan0"
+AP_CON_NAME = "Fotobox-AP"       # Name des NetworkManager-Profils fuer den Hotspot
+AP_SSID_DEFAULT = "Fotobox"      # Installer legt den Hotspot damit an; spaeter per /wlan aenderbar
+AP_PASSWORD_DEFAULT = "fotobox123"
+AP_IP = "10.42.0.1"              # feste Adresse des Pi im eigenen Hotspot
+AP_SUBNET_PREFIX = "10.42.0."
+WIFI_CONNECT_TIMEOUT = 45        # s, die ein Verbindungsversuch maximal dauern darf
+NMCLI = "/usr/bin/nmcli"

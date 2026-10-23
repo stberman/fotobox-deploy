@@ -1,0 +1,4 @@
+# Fotobox: die Web-App (laeuft als @USER@) darf WLAN-Einstellungen aendern und
+# den WLAN-Check neu anstossen - ohne Passwort, nur diese Befehle.
+@USER@ ALL=(root) NOPASSWD: /usr/bin/nmcli
+@USER@ ALL=(root) NOPASSWD: /usr/bin/systemctl restart --no-block fotobox-wifi, /usr/bin/systemctl restart fotobox-wifi

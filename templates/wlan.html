@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fotobox · WLAN</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; font-family: system-ui, sans-serif; background: #000; color: #fff; }
+  header { display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: #111; }
+  header a { color: #fff; text-decoration: none; font-size: 22px; }
+  header h1 { margin: 0; font-size: 20px; flex: 1; }
+  main { padding: 16px; max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+  .card { background: #161616; border-radius: 14px; padding: 16px; }
+  .card h2 { margin: 0 0 10px; font-size: 17px; color: #ddd; }
+  .row { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid #262626; font-size: 15px; }
+  .row:last-child { border-bottom: none; }
+  .row span:last-child { color: #bbb; text-align: right; word-break: break-all; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 13px; font-weight: 700; }
+  .b-client { background: #1e5631; } .b-ap { background: #8a4b08; } .b-off { background: #7b1d1d; } .b-eth { background: #1d4f7b; }
+  ul.nets { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow: auto; }
+  ul.nets li { display: flex; align-items: center; gap: 10px; padding: 11px 8px; border-bottom: 1px solid #262626; cursor: pointer; font-size: 16px; }
+  ul.nets li:active { background: #222; }
+  ul.nets li .name { flex: 1; }
+  ul.nets li .meta { color: #999; font-size: 13px; }
+  ul.nets li .known { color: #2ecc71; font-size: 13px; }
+  .hint { color: #999; font-size: 13px; margin: 6px 0 0; line-height: 1.4; }
+  label { display: block; font-size: 13px; color: #aaa; margin: 10px 0 4px; }
+  input[type=text], input[type=password] {
+    width: 100%; padding: 12px; font-size: 17px; border-radius: 10px; border: 1px solid #444; background: #0d0d0d; color: #fff;
+  }
+  .check { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 14px; color: #ccc; }
+  .check input { width: 20px; height: 20px; }
+  button { padding: 13px 18px; font-size: 16px; font-weight: 700; border: none; border-radius: 12px; color: #fff; cursor: pointer; margin-top: 12px; }
+  button:disabled { opacity: .5; }
+  .primary { background: #27ae60; width: 100%; }
+  .secondary { background: #2d2d2d; }
+  .danger { background: #c0392b; }
+  .warn { background: #8a4b08; }
+  .toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .toggle button { margin: 0; min-width: 110px; }
+  #msg { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); max-width: 90vw;
+    padding: 12px 18px; border-radius: 10px; font-size: 15px; display: none; z-index: 10; background: #c0392b; }
+  #msg.ok { background: #1e5631; }
+  #busy { background: #2c3e50; border-left: 4px solid #3498db; }
+  #lasterr { background: #3a1f1f; border-left: 4px solid #e74c3c; }
+</style>
+</head>
+<body>
+<header>
+  <a href="/" title="Zurück zur Kamera">◀</a>
+  <h1>WLAN-Einstellungen</h1>
+  <button class="secondary" style="margin:0;padding:8px 12px;font-size:14px" onclick="loadScan(true)">↻ Suchen</button>
+</header>
+<main>
+
+  <div class="card" id="busy" style="display:none">
+    <h2>⏳ Verbinde mit „<span id="busy-ssid"></span>“ …</h2>
+    <p class="hint">Das Tablet verliert jetzt die Verbindung zur Fotobox. Danach bitte mit dem
+      gewählten WLAN verbinden und <b>http://<span class="host"></span>.local</b> öffnen.
+      Klappt es nicht (z.&nbsp;B. falsches Passwort), erscheint nach ca. 1 Minute wieder das
+      WLAN „<span class="apname"></span>“.</p>
+  </div>
+
+  <div class="card" id="lasterr" style="display:none">
+    <h2>⚠️ Letzter Versuch fehlgeschlagen</h2>
+    <p class="hint" id="lasterr-text" style="color:#f1c4c4"></p>
+  </div>
+
+  <div class="card">
+    <h2>Status</h2>
+    <div class="row"><span>Modus</span><span id="st-mode">…</span></div>
+    <div class="row"><span>Verbunden mit</span><span id="st-ssid">–</span></div>
+    <div class="row"><span>Adresse(n)</span><span id="st-ip">–</span></div>
+    <div class="row"><span>Hostname</span><span id="st-host">–</span></div>
+    <p class="hint" id="st-error" style="color:#e74c3c"></p>
+  </div>
+
+  <div class="card">
+    <h2>Mit WLAN verbinden</h2>
+    <ul class="nets" id="nets"><li style="color:#999">Suche Netzwerke …</li></ul>
+    <p class="hint" id="scan-hint"></p>
+    <form id="connect-form" onsubmit="return doConnect(event)">
+      <label for="ssid">WLAN-Name (SSID)</label>
+      <input type="text" id="ssid" name="ssid" autocomplete="off" autocapitalize="off" required>
+      <label for="psk">Passwort (leer lassen bei offenem WLAN)</label>
+      <input type="password" id="psk" name="psk" autocomplete="off">
+      <div class="check"><input type="checkbox" id="showpw" onchange="psk.type=this.checked?'text':'password'"><label for="showpw" style="margin:0">Passwort anzeigen</label></div>
+      <div class="check"><input type="checkbox" id="hidden" name="hidden"><label for="hidden" style="margin:0">verstecktes Netzwerk</label></div>
+      <input type="hidden" id="security" name="security">
+      <button class="primary" id="btn-connect" type="submit">Verbinden</button>
+    </form>
+    <button class="secondary" id="btn-forget" onclick="doForget()" style="display:none">Gespeichertes WLAN „<span id="forget-ssid"></span>“ vergessen</button>
+  </div>
+
+  <div class="card">
+    <h2>Autark-Modus</h2>
+    <div class="toggle">
+      <p class="hint" style="margin:0">Pi öffnet <b>immer</b> sein eigenes WLAN „<span class="apname"></span>“ – für Orte ohne
+        WLAN. Tablet verbindet sich damit und öffnet <b>http://<span class="apip"></span></b>.
+        Kein Internet-Tunnel, Fotos bleiben nur auf dem Pi.</p>
+      <button id="btn-autark" class="secondary" onclick="toggleAutark()">…</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Eigenes WLAN (Hotspot) einstellen</h2>
+    <form onsubmit="return saveAp(event)">
+      <label for="ap-ssid">Name</label>
+      <input type="text" id="ap-ssid" maxlength="32" required>
+      <label for="ap-psk">Passwort (8–63 Zeichen)</label>
+      <input type="text" id="ap-psk" minlength="8" maxlength="63" required>
+      <button class="secondary" type="submit">Hotspot-Einstellungen speichern</button>
+    </form>
+    <p class="hint">Gilt für den Fallback (kein bekanntes WLAN gefunden) und den Autark-Modus.</p>
+  </div>
+
+</main>
+<div id="msg"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let st = null, known = {};
+
+function showMsg(t, ok){ const m=$('msg'); m.textContent=t; m.className = ok?'ok':''; m.style.display='block';
+  clearTimeout(showMsg.t); showMsg.t = setTimeout(()=>m.style.display='none', 6000); }
+
+async function api(url, data){
+  const opt = data ? { method:'POST', body: Object.entries(data).reduce((f,[k,v])=>(f.append(k,v),f), new FormData()) } : {};
+  const r = await fetch(url, opt);
+  const d = await r.json();
+  if (!d.ok) throw new Error(d.error || 'unbekannter Fehler');
+  return d;
+}
+
+const MODES = { client:['Mit WLAN verbunden','b-client'], ethernet:['Kabel (Ethernet)','b-eth'],
+                ap:['Eigener Hotspot aktiv','b-ap'], offline:['Keine Verbindung','b-off'] };
+
+function render(){
+  const m = MODES[st.mode] || MODES.offline;
+  $('st-mode').innerHTML = `<span class="badge ${m[1]}">${m[0]}</span>` + (st.autark ? ' <span class="badge b-ap">Autark</span>' : '');
+  $('st-ssid').textContent = st.mode==='ap' ? st.ap_ssid + ' (Hotspot)' : (st.ssid || '–');
+  $('st-ip').textContent = st.ips.length ? st.ips.map(i=>`${i.ip} (${i.dev})`).join(', ') : '–';
+  $('st-host').textContent = st.hostname + '.local';
+  $('st-error').textContent = st.error || '';
+  document.querySelectorAll('.host').forEach(e=>e.textContent=st.hostname);
+  document.querySelectorAll('.apname').forEach(e=>e.textContent=st.ap_ssid);
+  document.querySelectorAll('.apip').forEach(e=>e.textContent=st.ap_ip);
+  $('busy').style.display = st.busy ? 'block' : 'none';
+  $('busy-ssid').textContent = st.busy_ssid || '';
+  $('lasterr').style.display = (!st.busy && st.last_error) ? 'block' : 'none';
+  $('lasterr-text').textContent = st.last_error || '';
+  $('btn-connect').disabled = st.busy;
+  const b = $('btn-autark');
+  b.textContent = st.autark ? 'Ausschalten' : 'Einschalten';
+  b.className = st.autark ? 'danger' : 'warn';
+  if (document.activeElement !== $('ap-ssid') && document.activeElement !== $('ap-psk')) {
+    if (!$('ap-ssid').value) $('ap-ssid').value = st.ap_ssid || '';
+    if (!$('ap-psk').value)  $('ap-psk').value  = st.ap_password || '';
+  }
+}
+
+async function loadStatus(){
+  try { st = await api('/api/wifi/status'); render(); }
+  catch(e){ $('st-error').textContent = 'Status nicht abrufbar: ' + e.message; }
+}
+
+function pickNet(n){
+  $('ssid').value = n.ssid; $('security').value = n.security || ''; $('hidden').checked = false;
+  $('psk').value = ''; $('psk').focus();
+  $('btn-forget').style.display = n.known ? 'block' : 'none'; $('forget-ssid').textContent = n.ssid;
+}
+
+async function loadScan(manual){
+  if (manual) $('nets').innerHTML = '<li style="color:#999">Suche Netzwerke …</li>';
+  try {
+    const d = await api('/api/wifi/scan');
+    const ul = $('nets'); ul.innerHTML = '';
+    if (!d.networks.length) ul.innerHTML = '<li style="color:#999">Keine Netzwerke gefunden – Namen unten eintippen.</li>';
+    d.networks.forEach(n => {
+      const li = document.createElement('li');
+      const bars = n.signal > 70 ? '▂▄▆█' : n.signal > 45 ? '▂▄▆' : n.signal > 25 ? '▂▄' : '▂';
+      li.innerHTML = `<span class="name"></span>${n.known?'<span class="known">gespeichert</span>':''}<span class="meta">${n.security||'offen'} ${bars}</span>`;
+      li.querySelector('.name').textContent = n.ssid;
+      li.onclick = () => pickNet(n);
+      ul.appendChild(li);
+    });
+    $('scan-hint').textContent = d.cached ? 'Liste stammt vom letzten Scan vor dem Hotspot-Start (im Hotspot-Modus kann der Pi nicht neu suchen).' : '';
+  } catch(e){ $('nets').innerHTML = '<li style="color:#e74c3c">Scan fehlgeschlagen: ' + e.message + '</li>'; }
+}
+
+async function doConnect(ev){
+  ev.preventDefault();
+  const ssid = $('ssid').value.trim();
+  if (!confirm(`Mit „${ssid}“ verbinden?\n\nDas Tablet verliert dabei die Verbindung zur Fotobox.`)) return false;
+  try {
+    await api('/api/wifi/connect', { ssid, psk: $('psk').value, hidden: $('hidden').checked ? 1 : 0, security: $('security').value });
+    showMsg('Verbindungsversuch gestartet …', true);
+    loadStatus();
+  } catch(e){ showMsg(e.message); }
+  return false;
+}
+
+async function doForget(){
+  const ssid = $('forget-ssid').textContent;
+  if (!confirm(`Gespeichertes WLAN „${ssid}“ wirklich vergessen?`)) return;
+  try { await api('/api/wifi/forget', { ssid }); showMsg('Gelöscht.', true); $('btn-forget').style.display='none'; loadScan(); loadStatus(); }
+  catch(e){ showMsg(e.message); }
+}
+
+async function toggleAutark(){
+  const on = !st.autark;
+  const txt = on
+    ? `Autark-Modus EINSCHALTEN?\n\nDer Pi öffnet jetzt das WLAN „${st.ap_ssid}“ und trennt sich von „${st.ssid||'…'}“. Tablet danach mit „${st.ap_ssid}“ verbinden und http://${st.ap_ip} öffnen.`
+    : `Autark-Modus AUSSCHALTEN?\n\nDer Pi versucht wieder, sich mit einem gespeicherten WLAN zu verbinden. Findet er keins, kommt der Hotspot nach ca. 45 s zurück.`;
+  if (!confirm(txt)) return;
+  try { await api('/api/wifi/autark', { enabled: on ? 1 : 0 }); showMsg(on ? 'Autark-Modus wird aktiviert …' : 'Autark-Modus aus – suche bekannte WLANs …', true); setTimeout(loadStatus, 1500); }
+  catch(e){ showMsg(e.message); }
+}
+
+async function saveAp(ev){
+  ev.preventDefault();
+  try { await api('/api/wifi/ap', { ssid: $('ap-ssid').value, psk: $('ap-psk').value }); showMsg('Hotspot-Einstellungen gespeichert.', true); loadStatus(); }
+  catch(e){ showMsg(e.message); }
+  return false;
+}
+
+loadStatus(); loadScan();
+setInterval(loadStatus, 4000);
+</script>
+</body>
+</html>

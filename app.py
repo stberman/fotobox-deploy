@@ -6,16 +6,19 @@ die Gaeste-Galerie mit QR-Code und das Ausliefern der Fotos. Die Kamera-Logik
 steckt in camera.py, die Konstanten in config.py.
 """
 import io
+import ipaddress
 import os
+import socket
 import zipfile
 from datetime import datetime
 
 from flask import (Flask, Response, jsonify, render_template, request,
-                   send_from_directory, send_file, abort)
+                   send_from_directory, send_file, abort, redirect)
 from PIL import Image
 import qrcode
 
 import config
+import wifi
 from camera import CameraManager
 
 os.makedirs(config.PHOTO_DIR, exist_ok=True)
@@ -82,8 +85,35 @@ def mjpeg_part(frame):
 # --------------------------------------------------------------------------
 # Zugriffsschutz: von aussen (Tunnel) nur oeffentliche Pfade
 # --------------------------------------------------------------------------
+def _captive_redirect():
+    """Captive-Portal im eigenen Hotspot.
+
+    Handys/Tablets rufen nach dem Verbinden eine Testseite auf (z.B.
+    connectivitycheck.gstatic.com). Der Hotspot-DNS loest alles auf den Pi auf,
+    Port 80 wird auf die App umgeleitet - hier landet also jede fremde
+    Host-Adresse aus dem Hotspot-Netz und bekommt einen Redirect auf /wlan.
+    Das Geraet zeigt daraufhin das "Im Netzwerk anmelden"-Fenster.
+    """
+    addr = request.remote_addr or ""
+    if not addr.startswith(config.AP_SUBNET_PREFIX):
+        return None
+    host = request.host.split(":")[0].lower()
+    try:
+        ipaddress.ip_address(host)
+        return None          # Zugriff per IP-Adresse: nie umleiten (keine Schleifen)
+    except ValueError:
+        pass
+    me = socket.gethostname().lower()
+    if host in ("localhost", me, me + ".local"):
+        return None
+    return redirect(f"http://{config.AP_IP}:{config.PORT}/wlan", code=302)
+
+
 @app.before_request
 def _guard_public():
+    captive = _captive_redirect()
+    if captive is not None:
+        return captive
     if is_lan_request():
         return
     if any(request.path.startswith(p) for p in config.PUBLIC_PREFIXES):
@@ -218,6 +248,62 @@ def rotate_photo():
             pass
     make_thumb(filename)
     return jsonify(ok=True)
+
+
+# --------------------------------------------------------------------------
+# Routen: WLAN-Einstellungen (nur LAN; nicht in PUBLIC_PREFIXES -> Tunnel 403)
+# --------------------------------------------------------------------------
+@app.route("/wlan")
+def wlan():
+    return render_template("wlan.html")
+
+
+def _wifi_call(fn, *args, **kw):
+    """Fuehrt eine wifi.py-Funktion aus und verpackt Fehler als JSON."""
+    try:
+        result = fn(*args, **kw)
+    except wifi.WifiError as e:
+        return jsonify(ok=False, error=str(e)), 400
+    except Exception as e:                       # noqa: BLE001
+        return jsonify(ok=False, error=f"Interner Fehler: {e}"), 500
+    if isinstance(result, dict):
+        return jsonify(ok=True, **result)
+    return jsonify(ok=True)
+
+
+@app.route("/api/wifi/status")
+def api_wifi_status():
+    return _wifi_call(wifi.status)
+
+
+@app.route("/api/wifi/scan")
+def api_wifi_scan():
+    return _wifi_call(wifi.scan)
+
+
+@app.route("/api/wifi/connect", methods=["POST"])
+def api_wifi_connect():
+    f = request.form
+    return _wifi_call(wifi.connect, f.get("ssid", ""), f.get("psk", ""),
+                      hidden=f.get("hidden") in ("1", "true", "on"),
+                      security=f.get("security", ""))
+
+
+@app.route("/api/wifi/forget", methods=["POST"])
+def api_wifi_forget():
+    return _wifi_call(wifi.forget, request.form.get("ssid", ""))
+
+
+@app.route("/api/wifi/ap", methods=["POST"])
+def api_wifi_ap():
+    return _wifi_call(wifi.set_ap, request.form.get("ssid", ""),
+                      request.form.get("psk", ""))
+
+
+@app.route("/api/wifi/autark", methods=["POST"])
+def api_wifi_autark():
+    enabled = request.form.get("enabled") in ("1", "true", "on")
+    return _wifi_call(wifi.set_autark, enabled)
 
 
 # --------------------------------------------------------------------------

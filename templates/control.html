@@ -25,6 +25,10 @@
     position: absolute; top: 14px; left: 14px; font-size: 14px;
     background: rgba(0,0,0,.5); padding: 6px 12px; border-radius: 20px;
   }
+  #wlan-link {
+    position: absolute; top: 56px; left: 14px; font-size: 13px; color: #ccc;
+    background: rgba(0,0,0,.5); padding: 6px 12px; border-radius: 20px; text-decoration: none;
+  }
   .dot { display:inline-block; width:10px; height:10px; border-radius:50%;
          margin-right:6px; vertical-align:middle; }
   .ok { background:#2ecc71; } .bad { background:#e74c3c; }
@@ -115,6 +119,7 @@
   <div id="feed-wrap">
     <img id="feed" src="" alt="Liveview">
     <div id="status"><span class="dot bad"></span>…</div>
+    <a id="wlan-link" href="/wlan" title="WLAN-Einstellungen">⚙ WLAN</a>
     <a id="qr-mini" href="/galerie" target="_blank">
       <img src="/qr.png" alt="QR"><span>Alle Fotos</span>
     </a>

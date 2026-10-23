@@ -1,0 +1,17 @@
+[Unit]
+Description=Cloudflare Quick-Tunnel fuer die Fotobox
+After=network-online.target fotobox.service
+Wants=network-online.target
+# Im Autark-Modus (eigener Hotspot, kein Internet) gar nicht starten.
+ConditionPathExists=!/var/lib/fotobox/autark
+
+[Service]
+User=@USER@
+ExecStart=@DIR@/tunnel.sh
+# Beim Stoppen die alte Tunnel-URL verwerfen, damit QR-Codes wieder lokal zeigen.
+ExecStopPost=/bin/sh -c ': > "@DIR@/public_url.txt"'
+Restart=on-failure
+RestartSec=20
+
+[Install]
+WantedBy=multi-user.target

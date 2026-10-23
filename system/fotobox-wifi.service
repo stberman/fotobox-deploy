@@ -1,0 +1,15 @@
+[Unit]
+Description=Fotobox WLAN-Check: bekanntes Netz verbinden oder eigenen Hotspot starten
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+# RemainAfterExit: 'systemctl restart fotobox-wifi' fuehrt den Check erneut aus
+# (so schaltet die /wlan-Seite den Autark-Modus um).
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/fotobox-wifi-check
+TimeoutStartSec=180
+
+[Install]
+WantedBy=multi-user.target
