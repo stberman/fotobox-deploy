@@ -50,7 +50,7 @@
 
   <div class="card" id="preview-card">
     <div class="onoff">
-      <div><b id="state-txt">…</b><div class="hint">Wird nach jeder Aufnahme automatisch aufs Foto gelegt. Das Original bleibt in photos/originals/.</div></div>
+      <div><b id="state-txt">…</b><div class="hint">Jede Änderung gilt sofort für die nächsten Fotos. Das Original bleibt in photos/originals/.</div></div>
       <button id="btn-onoff" class="secondary" onclick="toggleEnabled()">…</button>
     </div>
     <h2 style="margin-top:14px">Vorschau <span class="hint" style="display:inline">(auf dem letzten Foto, sonst Platzhalter)</span></h2>
@@ -98,10 +98,6 @@
     <input type="range" id="text_offset" name="text_offset" min="0" max="0.2" step="0.005">
   </div>
 
-  <div class="card" style="grid-column: 1 / -1">
-    <button class="primary" onclick="save(true)">💾 Speichern</button>
-    <p class="hint">Änderungen werden sofort in der Vorschau gezeigt; „Speichern“ macht sie für die nächsten Fotos wirksam.</p>
-  </div>
 </main>
 <div id="msg"></div>
 
@@ -140,7 +136,7 @@ function renderTiles(){
     const none = document.createElement('div');
     none.className = 'tile' + (!S[key] ? ' sel' : '');
     none.innerHTML = `<div style="aspect-ratio:3/2;display:flex;align-items:center;justify-content:center;color:#888">∅</div>${noneLabel}`;
-    none.onclick = () => { S[key] = ''; renderTiles(); refreshPreview(); };
+    none.onclick = () => { S[key] = ''; renderTiles(); refreshPreview(); save(false, true); };
     container.appendChild(none);
     list.forEach(a => {
       const t = document.createElement('div');
@@ -149,13 +145,13 @@ function renderTiles(){
       t.querySelector('span').textContent = a.title;
       t.onclick = () => {
         S[key] = a.name;
-        if (key === 'frame' && a.recommend) { Object.assign(S, a.recommend); fill(); }
-        renderTiles(); refreshPreview();
+        if (key === 'frame') { if (a.recommend) Object.assign(S, a.recommend); S.enabled = true; }
+        fill(); renderTiles(); refreshPreview(); save(false, true);
       };
       t.querySelector('.del').onclick = async (ev) => {
         ev.stopPropagation();
         if (!confirm(`„${a.title}“ löschen?`)) return;
-        try { await api('/api/overlay/delete', { name: a.name }); if (S[key] === a.name) S[key] = ''; await loadAll(); }
+        try { await api('/api/overlay/delete', { name: a.name }); if (S[key] === a.name) { S[key] = ''; } await loadAll(); await save(false); }
         catch(e){ showMsg(e.message); }
       };
       container.appendChild(t);
@@ -174,13 +170,17 @@ function refreshPreview(){
   }, 250);
 }
 
-async function save(announce){
+let saveTimer = null;
+async function save(announce, withEnabled){
   try {
-    const d = await api('/api/overlay/settings', collect());
+    const data = collect();
+    if (withEnabled) data.enabled = S.enabled ? 1 : 0;
+    const d = await api('/api/overlay/settings', data);
     S = Object.assign(S, d.settings); fill();
     if (announce) showMsg('Gespeichert.', true);
   } catch(e){ showMsg(e.message); }
 }
+function saveSoon(){ clearTimeout(saveTimer); saveTimer = setTimeout(() => save(false), 500); }
 
 async function toggleEnabled(){
   try {
@@ -196,7 +196,7 @@ async function upload(input, kind){
   const fd = new FormData(); fd.append('file', input.files[0]); fd.append('kind', kind);
   try {
     const d = await api('/api/overlay/upload', fd);
-    S[kind] = d.name; await loadAll(); showMsg('Hochgeladen: ' + d.name, true);
+    S[kind] = d.name; if (kind === 'frame') S.enabled = true; await loadAll(); await save(false, true); showMsg('Hochgeladen und gesetzt: ' + d.name, true);
   } catch(e){ showMsg(e.message); }
   input.value = '';
 }
@@ -210,7 +210,7 @@ async function loadAll(){
 
 document.querySelectorAll('input, select').forEach(el => {
   if (el.type === 'file') return;
-  el.addEventListener('input', () => { if (el.id === 'logo_scale') $('logo_scale_v').textContent = Math.round(el.value * 100); refreshPreview(); });
+  el.addEventListener('input', () => { if (el.id === 'logo_scale') $('logo_scale_v').textContent = Math.round(el.value * 100); refreshPreview(); saveSoon(); });
 });
 loadAll().catch(e => showMsg('Laden fehlgeschlagen: ' + e.message));
 </script>
