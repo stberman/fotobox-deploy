@@ -65,6 +65,24 @@ echo
 as_user() { sudo -u "$FB_USER" -H "$@"; }
 
 # ---------------------------------------------------------------------------
+# Ein frisch geflashter Pi hat eine falsche Uhrzeit, bis NTP greift. Dann scheitern
+# apt ("Not live until ...") und pip ("certificate is not yet valid"). Also warten.
+if command -v timedatectl >/dev/null 2>&1; then
+  ntp_ok() { [ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" = "yes" ]; }
+  if ! ntp_ok; then
+    c_info "Warte auf Zeitsynchronisation (Uhr steht auf $(date '+%d.%m.%Y %H:%M')) ..."
+    timedatectl set-ntp true 2>/dev/null || true
+    systemctl restart systemd-timesyncd 2>/dev/null || true
+    for _ in $(seq 1 45); do ntp_ok && break; sleep 2; done
+  fi
+  if ntp_ok; then
+    c_ok "Uhrzeit synchron: $(date '+%d.%m.%Y %H:%M:%S')"
+  else
+    c_warn "Keine Zeitsynchronisation (kein Internet?). Downloads koennen an Zertifikaten scheitern."
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 c_info "Systempakete installieren ..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
@@ -93,7 +111,7 @@ if [ ! -x "$DIR/venv/bin/python" ]; then
   as_user python3 -m venv --system-site-packages "$DIR/venv"
 fi
 as_user "$DIR/venv/bin/pip" install -q --upgrade pip >/dev/null 2>&1 || true
-as_user "$DIR/venv/bin/pip" install -q -r "$DIR/requirements.txt"
+as_user "$DIR/venv/bin/pip" install -q -r "$DIR/requirements.txt" || die "pip install fehlgeschlagen (Internet/Uhrzeit pruefen: timedatectl)"
 as_user "$DIR/venv/bin/python" -c "import flask, qrcode, PIL" || die "Python-Module fehlen (siehe Ausgabe oben)."
 c_ok "venv + Abhaengigkeiten"
 
