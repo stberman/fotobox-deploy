@@ -177,13 +177,24 @@ class CameraManager:
              "--capture-image-and-download",
              "--filename", target, "--force-overwrite"],
             capture_output=True, text=True, timeout=config.CAPTURE_TIMEOUT)
+        output = (result.stderr.strip() + "\n" + result.stdout.strip()).strip()
         if result.returncode != 0:
-            raise RuntimeError(result.stderr.strip() or result.stdout.strip()
-                               or "Unbekannter gphoto2-Fehler")
+            raise RuntimeError(output or "Unbekannter gphoto2-Fehler")
+        # gphoto2 meldet "Could not capture" bei Canon teils mit Exit-Code 0,
+        # z.B. wenn der Autofokus kein Ziel findet oder das Objektiv zu ist.
+        if "could not capture" in output.lower():
+            raise RuntimeError(
+                "Kamera konnte nicht ausloesen. Typische Ursachen: Autofokus findet "
+                "kein Ziel (zu dunkel/zu nah), Objektivdeckel drauf, Objektiv nicht "
+                "ausgefahren, Kamera im Wiedergabe-Modus. gphoto2: " + output)
         made = [f for f in os.listdir(config.PHOTO_DIR)
                 if f.startswith(f"fotobox_{ts}")
                 and f.lower().endswith(config.ALLOWED_EXT)]
         if not made:
-            raise RuntimeError("Aufnahme ok, aber kein JPG heruntergeladen "
-                               "(Kamera auf JPG statt nur RAW stellen).")
+            got = [f for f in os.listdir(config.PHOTO_DIR) if f.startswith(f"fotobox_{ts}")]
+            if got:
+                raise RuntimeError("Nur RAW erhalten (" + ", ".join(got) + ") - Kamera "
+                                   "auf JPEG (z.B. 'Large Fine JPEG') stellen.")
+            raise RuntimeError("Aufnahme gemeldet, aber keine Datei erhalten. gphoto2: "
+                               + (output or "(keine Ausgabe)"))
         return sorted(made)[0]

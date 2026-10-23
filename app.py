@@ -181,8 +181,14 @@ def do_capture():
 
 @app.route("/api/status")
 def api_status():
+    ov = overlay.load_settings()
+    frame = ov.get("frame", "") if ov.get("enabled") else ""
+    fit = "slice"
+    if frame:
+        path = os.path.join(config.OVERLAY_DIR, frame)
+        fit = overlay.asset_meta(path).get("fit", "slice") if os.path.isfile(path) else "slice"
     return jsonify(camera=cam.is_live(), count=len(list_photos()),
-                   overlay=overlay.load_settings().get("enabled", False))
+                   overlay=bool(ov.get("enabled")), overlay_frame=frame, overlay_fit=fit)
 
 
 class _ZipSink:

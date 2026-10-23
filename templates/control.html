@@ -20,17 +20,25 @@
     flex: 1; position: relative; background: #000; overflow: hidden;
     display: flex; align-items: center; justify-content: center;
   }
-  #feed { width: 100%; height: 100%; object-fit: contain; }
+  /* #stage hat exakt das Seitenverhaeltnis des Kamerabilds (per JS gesetzt) und
+     wird gedreht/gezoomt. #frame-box liegt aufrecht darueber, so gross wie das
+     gedrehte Bild = so wie der Rahmen spaeter auf dem Foto sitzt. */
+  #stage { position: absolute; left: 50%; top: 50%; transform-origin: center; transition: transform .15s ease; }
+  #feed { width: 100%; height: 100%; display: block; }
+  #frame-box {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    pointer-events: none; display: none; z-index: 3; box-sizing: border-box;
+  }
+  #frame-box img { width: 100%; height: 100%; display: block; object-fit: cover; opacity: .92; }
+  #frame-box.slice { border-style: solid; border-color: transparent; border-image-slice: 25% fill; border-image-repeat: stretch; opacity: .92; }
   #status {
     position: absolute; top: 14px; left: 14px; font-size: 14px;
     background: rgba(0,0,0,.5); padding: 6px 12px; border-radius: 20px;
   }
-  #wlan-link, #frame-link {
+  #wlan-link {
     position: absolute; top: 56px; left: 14px; font-size: 13px; color: #ccc;
     background: rgba(0,0,0,.5); padding: 6px 12px; border-radius: 20px; text-decoration: none;
   }
-  #frame-link { top: 94px; }
-  #frame-link.on { color: #2ecc71; }
   .dot { display:inline-block; width:10px; height:10px; border-radius:50%;
          margin-right:6px; vertical-align:middle; }
   .ok { background:#2ecc71; } .bad { background:#e74c3c; }
@@ -63,12 +71,18 @@
   }
   #shutter:active { transform: scale(.93); }
   #shutter:disabled { background:#555; border-color:#777; box-shadow:none; }
-  #feed { transition: transform .15s ease; }
   #live-rotate {
     width: 72px; height: 72px; border-radius: 50%; border: 3px solid #555;
     background: #1d1d1d; color: #fff; font-size: 26px; cursor: pointer;
   }
   #live-rotate.on { border-color: #2980b9; background: #1f2d3a; }
+  #frame-btn {
+    height: 72px; padding: 0 20px; border-radius: 36px; border: 3px solid #555;
+    background: #1d1d1d; color: #fff; font-size: 18px; font-weight: 700; text-decoration: none;
+    display: flex; align-items: center; gap: 10px; white-space: nowrap;
+  }
+  #frame-btn .ico { font-size: 30px; }
+  #frame-btn.on { border-color: #27ae60; background: #1b3324; }
 
   /* ---------- Screen 2: Ergebnis ---------- */
   #result { flex-direction: column; }
@@ -119,10 +133,10 @@
 <!-- Screen 1: Liveview -->
 <div id="live" class="screen active">
   <div id="feed-wrap">
-    <img id="feed" src="" alt="Liveview">
+    <div id="stage"><img id="feed" src="" alt="Liveview"></div>
+    <div id="frame-box"><img id="frame-img" src="" alt=""></div>
     <div id="status"><span class="dot bad"></span>…</div>
     <a id="wlan-link" href="/wlan" title="WLAN-Einstellungen">⚙ WLAN</a>
-    <a id="frame-link" href="/rahmen" title="Rahmen &amp; Beschriftung">🖼 Rahmen: <span id="frame-state">…</span></a>
     <a id="qr-mini" href="/galerie" target="_blank">
       <img src="/qr.png" alt="QR"><span>Alle Fotos</span>
     </a>
@@ -140,6 +154,7 @@
     </div>
     <button id="shutter">FOTO</button>
     <button id="live-rotate" title="Vorschau drehen">🔄</button>
+    <a id="frame-btn" href="/rahmen" title="Rahmen &amp; Beschriftung"><span class="ico">🖼</span><span id="frame-state">Rahmen</span></a>
   </div>
 </div>
 
@@ -175,16 +190,64 @@ const $ = id => document.getElementById(id);
 const feed = $('feed'), shutter = $('shutter');
 const liveScreen = $('live'), resultScreen = $('result');
 
-function applyFeedTransform(){
-  feed.style.transform = 'rotate(' + liveRotation + 'deg) scale(' + liveZoom + ')';
+let frameInfo = { name: '', fit: 'slice', w: 0, h: 0 };   // aktiver Rahmen fuer die Vorschau
+
+function layout(){
+  const wrap = $('feed-wrap'), stage = $('stage');
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+  const nw = feed.naturalWidth || 3, nh = feed.naturalHeight || 2;   // Kamerabild (Fallback 3:2)
+  const s = Math.min(W / nw, H / nh);
+  const w = Math.round(nw * s), h = Math.round(nh * s);
+  stage.style.width = w + 'px'; stage.style.height = h + 'px';
+  stage.style.marginLeft = (-w / 2) + 'px'; stage.style.marginTop = (-h / 2) + 'px';
+  stage.style.transform = 'rotate(' + liveRotation + 'deg) scale(' + liveZoom + ')';
   $('live-rotate').classList.toggle('on', liveRotation !== 0);
+  // Rahmen-Vorschau: aufrecht, so gross wie das gedrehte + gezoomte Bild
+  const box = $('frame-box');
+  const swap = liveRotation % 180 !== 0;
+  const bw = (swap ? h : w) * liveZoom, bh = (swap ? w : h) * liveZoom;
+  box.style.width = bw + 'px'; box.style.height = bh + 'px';
+  if (frameInfo.name && frameInfo.fit !== 'cover' && frameInfo.w) {
+    // wie overlay.py (9-Slice): Ecke = 25% der kurzen Seite
+    box.style.borderWidth = Math.round(0.25 * Math.min(bw, bh)) + 'px';
+  }
 }
 $('live-rotate').onclick = () => {
   liveRotation = (liveRotation + 90) % 360;
-  applyFeedTransform();
+  layout();
 };
-$('zoom-in').onclick  = () => { liveZoom = Math.min(liveZoom + 0.1, 3); applyFeedTransform(); };
-$('zoom-out').onclick = () => { liveZoom = Math.max(liveZoom - 0.1, 1); applyFeedTransform(); };
+$('zoom-in').onclick  = () => { liveZoom = Math.min(liveZoom + 0.1, 3); layout(); };
+$('zoom-out').onclick = () => { liveZoom = Math.max(liveZoom - 0.1, 1); layout(); };
+feed.onload = layout;
+window.addEventListener('resize', layout);
+
+// Aktiven Rahmen in die Vorschau legen (oder entfernen).
+function setFrame(name, fit){
+  if (name === frameInfo.name && fit === frameInfo.fit) return;
+  frameInfo = { name, fit, w: 0, h: 0 };
+  const box = $('frame-box'), img = $('frame-img');
+  if (!name) {
+    box.style.display = 'none'; box.classList.remove('slice');
+    box.style.borderImageSource = ''; box.style.borderWidth = '0'; img.src = '';
+    return;
+  }
+  const url = '/overlays/' + encodeURIComponent(name);
+  const probe = new Image();
+  probe.onload = () => {
+    if (frameInfo.name !== name) return;            // inzwischen anderer Rahmen gewaehlt
+    frameInfo.w = probe.naturalWidth; frameInfo.h = probe.naturalHeight;
+    if (fit === 'cover') {
+      box.classList.remove('slice'); box.style.borderImageSource = ''; box.style.borderWidth = '0';
+      img.src = url; img.style.display = 'block';
+    } else {
+      box.classList.add('slice'); img.style.display = 'none'; img.src = '';
+      box.style.borderImageSource = 'url("' + url + '")';
+    }
+    box.style.display = 'block';
+    layout();
+  };
+  probe.src = url;
+}
 
 function startFeed() { feed.src = '/preview.mjpg?t=' + Date.now(); }
 function stopFeed()  { feed.src = ''; }   // schliesst den MJPEG-Stream
@@ -278,12 +341,13 @@ async function refreshStatus(){
     const el = $('status');
     if (d.camera){ el.innerHTML='<span class="dot ok"></span>Bereit · '+d.count+' Fotos'; }
     else { el.innerHTML='<span class="dot bad"></span>Kamera startet…'; }
-    $('frame-state').textContent = d.overlay ? 'ein' : 'aus';
-    $('frame-link').classList.toggle('on', !!d.overlay);
+    $('frame-state').textContent = d.overlay ? 'Rahmen: ein' : 'Rahmen: aus';
+    $('frame-btn').classList.toggle('on', !!d.overlay);
+    setFrame(d.overlay ? (d.overlay_frame || '') : '', d.overlay_fit || 'slice');
   } catch(e){}
 }
 refreshStatus(); setInterval(refreshStatus, 4000);
-startFeed();
+startFeed(); layout();
 // Falls der Stream mal abreisst: alle 15s neu verbinden, wenn Screen 1 aktiv
 feed.onerror = () => { if (liveScreen.classList.contains('active')) setTimeout(startFeed, 1500); };
 </script>
