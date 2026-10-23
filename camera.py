@@ -30,6 +30,7 @@ class CameraManager:
         self._cam_lock = threading.Lock()   # serialisiert exklusiven Kamerazugriff
         self._paused = threading.Event()     # gesetzt => Liveview ruht (Capture laeuft)
         self._proc = None
+        self._use_card = None         # None = noch nicht geprueft; True = SD-Karte in der Kamera
         self._stop = False
         self._sup = threading.Thread(target=self._supervise,
                                      name="liveview", daemon=True)
@@ -168,20 +169,47 @@ class CameraManager:
         finally:
             self._paused.clear()       # Supervisor startet den Liveview danach neu
 
-    def _capture_still(self):
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        target = os.path.join(config.PHOTO_DIR, f"fotobox_{ts}.%C")
-        # capturetarget=1 -> Bild bleibt zusaetzlich auf der Kamera-SD-Karte (Backup).
+    NO_CARD = "4294967295"        # availableshots = 0xFFFFFFFF -> keine Speicherkarte
+
+    def _card_present(self):
+        """True, wenn die Kamera eine Speicherkarte meldet (Abfrage ca. 1 s)."""
+        try:
+            r = subprocess.run(["gphoto2", "--get-config", "availableshots"],
+                               capture_output=True, text=True, timeout=20)
+        except Exception:
+            return False
+        for line in r.stdout.splitlines():
+            if line.startswith("Current:"):
+                return line.split(":", 1)[1].strip() != self.NO_CARD
+        return False
+
+    def _run_capture(self, target, capturetarget):
+        """Ein gphoto2-Aufnahmeversuch; gibt die gesammelte Ausgabe zurueck."""
         result = subprocess.run(
-            ["gphoto2", "--set-config-index", "capturetarget=1",
+            ["gphoto2", "--set-config-index", f"capturetarget={capturetarget}",
              "--capture-image-and-download",
              "--filename", target, "--force-overwrite"],
             capture_output=True, text=True, timeout=config.CAPTURE_TIMEOUT)
         output = (result.stderr.strip() + "\n" + result.stdout.strip()).strip()
         if result.returncode != 0:
             raise RuntimeError(output or "Unbekannter gphoto2-Fehler")
+        return output
+
+    def _capture_still(self):
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        target = os.path.join(config.PHOTO_DIR, f"fotobox_{ts}.%C")
+        # capturetarget=1 (Karte): Bild bleibt zusaetzlich auf der Kamera-SD als Backup.
+        # Ohne Karte verweigert die Kamera die Aufnahme -> capturetarget=0 (interner RAM).
+        # Die Entscheidung wird gemerkt und nur nach einem Fehlschlag neu geprueft.
+        if self._use_card is None:
+            self._use_card = self._card_present()
+        output = self._run_capture(target, 1 if self._use_card else 0)
         # gphoto2 meldet "Could not capture" bei Canon teils mit Exit-Code 0,
-        # z.B. wenn der Autofokus kein Ziel findet oder das Objektiv zu ist.
+        # z.B. ohne Karte, wenn der Autofokus kein Ziel findet oder das Objektiv zu ist.
+        if "could not capture" in output.lower() and self._use_card:
+            self._use_card = self._card_present()
+            if not self._use_card:
+                output = self._run_capture(target, 0)
         if "could not capture" in output.lower():
             raise RuntimeError(
                 "Kamera konnte nicht ausloesen. Typische Ursachen: Autofokus findet "

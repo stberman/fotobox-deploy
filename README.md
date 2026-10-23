@@ -166,7 +166,9 @@ gphoto2 --auto-detect       # wird die M50 gesehen?
 ## Kamera-Hinweise
 - Objektiv **ausfahren** und Deckel ab – sonst verweigert die M50 Liveview und Auslösung.
 - **Auto-Power-Off deaktivieren**; für Dauerbetrieb einen Dummy-Akku (DR-E12 + ACK-E12) verwenden.
-- Eine **SD-Karte** muss eingelegt sein (für das Backup auf der Kamera).
+- **SD-Karte in der Kamera ist optional:** mit Karte bleibt jedes Foto zusätzlich dort als Backup,
+  ohne Karte nimmt die App in den internen Kameraspeicher auf.
+- **Wahlrad auf P** (oder Av/Tv/M). In Auto- und Szenenmodi lässt die M50 keine Fernauslösung zu.
 - Kamera auf **JPG** (nicht nur RAW) stellen.
 
 ## Entwicklung
