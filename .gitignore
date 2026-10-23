@@ -25,3 +25,6 @@ Thumbs.db
 # --- Rahmen/Overlay ---
 overlay_settings.json   # aktive Rahmen-Einstellungen (geraetespezifisch)
 photos/originals/
+
+# private Rahmen (persoenliche Fotos, nicht ins oeffentliche Repo)
+overlays-privat/

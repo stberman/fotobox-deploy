@@ -109,22 +109,51 @@ def _safe_asset(name):
     return path if os.path.isfile(path) else None
 
 
+def asset_meta(path):
+    """Metadaten eines Rahmens: aus gleichnamiger .json und/oder PNG-Textfeldern.
+
+    PNG-Textfelder (fotobox_title, fotobox_fit, fotobox_recommend als JSON)
+    ueberleben den Upload ueber die Weboberflaeche, eine .json-Datei nicht.
+    Erkannte Schluessel: title, kind (frame|logo), fit (slice|cover) und alle
+    Einstellungen aus DEFAULTS als Empfehlung.
+    """
+    meta = {}
+    try:
+        with Image.open(path) as im:
+            info = getattr(im, "text", None) or im.info
+            if info.get("fotobox_title"):
+                meta["title"] = str(info["fotobox_title"])
+            if info.get("fotobox_fit"):
+                meta["fit"] = str(info["fotobox_fit"])
+            if info.get("fotobox_kind"):
+                meta["kind"] = str(info["fotobox_kind"])
+            if info.get("fotobox_recommend"):
+                rec = json.loads(info["fotobox_recommend"])
+                if isinstance(rec, dict):
+                    meta.update(rec)
+    except Exception:                            # noqa: BLE001 - Metadaten sind optional
+        pass
+    side = os.path.splitext(path)[0] + ".json"
+    try:
+        with open(side) as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            meta.update(data)
+    except (OSError, ValueError):
+        pass
+    return meta
+
+
 def list_assets():
-    """Alle PNGs in overlays/ mit optionalen Empfehlungen aus gleichnamiger .json."""
+    """Alle PNGs in overlays/ mit Titel, Art und empfohlenen Einstellungen."""
     os.makedirs(config.OVERLAY_DIR, exist_ok=True)
     items = []
     for name in sorted(os.listdir(config.OVERLAY_DIR)):
         if not name.lower().endswith(FRAME_EXT):
             continue
-        meta = {}
-        side = os.path.join(config.OVERLAY_DIR, os.path.splitext(name)[0] + ".json")
-        try:
-            with open(side) as f:
-                meta = json.load(f)
-        except (OSError, ValueError):
-            pass
+        meta = asset_meta(os.path.join(config.OVERLAY_DIR, name))
         items.append({"name": name, "title": meta.get("title", os.path.splitext(name)[0]),
-                      "kind": meta.get("kind", "frame"),
+                      "kind": meta.get("kind", "frame"), "fit": meta.get("fit", "slice"),
                       "recommend": {k: v for k, v in meta.items() if k in DEFAULTS}})
     return items
 
@@ -178,17 +207,27 @@ def _font(px):
         return ImageFont.load_default()
 
 
-def _fit_frame(fr, W, H, inset=0.25):
-    """Skaliert einen Rahmen per 9-Slice auf WxH.
+def _fit_frame(fr, W, H, inset=0.25, mode="slice"):
+    """Skaliert einen Rahmen auf WxH.
 
-    Ecken bleiben proportional (Faktor kurze Seite Foto / kurze Seite Rahmen),
-    Kanten werden nur in Laengsrichtung gestreckt. So passt ein 3:2-Rahmen auch
-    auf Hochformat, ohne dass Raender verzerrt werden oder ein breiter unterer
+    mode "slice" (Standard, fuer Rand-Rahmen): 9-Slice - Ecken bleiben
+    proportional (Faktor kurze Seite Foto / kurze Seite Rahmen), Kanten werden
+    nur in Laengsrichtung gestreckt. So passt ein 3:2-Rahmen auch auf
+    Hochformat, ohne dass Raender verzerrt werden oder ein breiter unterer
     Rand (Polaroid) an die Seite wandert.
+
+    mode "cover" (fuer fotografische Kulissen): Rahmen proportional so
+    vergroessern, dass er das Foto ganz bedeckt, und mittig beschneiden.
     """
     fw, fh = fr.size
     if (fw, fh) == (W, H):
         return fr
+    if mode == "cover":
+        sc = max(W / fw, H / fh)
+        nw, nh = max(W, int(round(fw * sc))), max(H, int(round(fh * sc)))
+        fr = fr.resize((nw, nh), Image.Resampling.LANCZOS)
+        x0, y0 = (nw - W) // 2, (nh - H) // 2
+        return fr.crop((x0, y0, x0 + W, y0 + H))
     scale = min(W, H) / min(fw, fh)
     cf = int(min(fw, fh) * inset)              # Ecken-Groesse im Rahmen
     c = max(1, int(cf * scale))                # Ecken-Groesse im Ziel
@@ -230,8 +269,9 @@ def render(img, settings=None):
 
     frame_path = _safe_asset(s.get("frame"))
     if frame_path:
+        fit = asset_meta(frame_path).get("fit", "slice")
         with Image.open(frame_path) as fr:
-            fr = _fit_frame(fr.convert("RGBA"), W, H)
+            fr = _fit_frame(fr.convert("RGBA"), W, H, mode=fit)
             img.paste(fr, (0, 0), fr)
 
     logo_path = _safe_asset(s.get("logo"))
