@@ -8,16 +8,20 @@ import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PHOTO_DIR = os.path.join(BASE_DIR, "photos")
 THUMB_DIR = os.path.join(BASE_DIR, "static", "thumbs")
+# Mittelgrosse Ansichtsbilder (Ergebnis-Screen, Galerie-Vollbild, Foto-Seite):
+# laden auf Tablet/Handy in Sekundenbruchteilen statt 5-12 MB Original.
+PREVIEW_DIR = os.path.join(BASE_DIR, "static", "previews")
 # Wird vom Tunnel-Skript mit der oeffentlichen URL gefuellt (Cloudflare Quick-Tunnel)
 PUBLIC_URL_FILE = os.path.join(BASE_DIR, "public_url.txt")
 
 PORT = 5000
 THUMB_SIZE = (600, 600)
+PREVIEW_SIZE = (1600, 1600)
 ALLOWED_EXT = (".jpg", ".jpeg", ".png")
 
 # Pfade, die von aussen (ueber den Tunnel) erreichbar sind. Steuerung/Liveview NICHT.
-PUBLIC_PREFIXES = ("/galerie", "/foto/", "/photos/", "/thumb/", "/qr.png",
-                   "/api/photos", "/static/")
+PUBLIC_PREFIXES = ("/galerie", "/foto/", "/photos/", "/thumb/", "/preview/",
+                   "/qr.png", "/api/photos", "/static/")
 
 # --- Kamera / Liveview ---------------------------------------------------
 STREAM_MAX_FPS = 15              # Obergrenze fuer an den Browser gesendete Frames (0 = unbegrenzt)

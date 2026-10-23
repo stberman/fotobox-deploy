@@ -19,7 +19,7 @@ import os
 import shutil
 from datetime import datetime
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 import config
 
@@ -327,9 +327,12 @@ def apply_to_file(path, settings=None):
     if not os.path.exists(orig):
         shutil.copy2(path, orig)
     with Image.open(orig) as im:
-        exif = im.info.get("exif", b"")
-        out = render(im, s)
-    out.save(path, "JPEG", quality=92, exif=exif)
+        exif = im.getexif()
+        # Kamera-Orientierung einrechnen, Rahmen auf das aufrechte Bild legen
+        # und das Tag auf 1 setzen, sonst dreht der Browser ein zweites Mal.
+        out = render(ImageOps.exif_transpose(im), s)
+        exif[0x0112] = 1
+    out.save(path, "JPEG", quality=92, exif=exif.tobytes())
     return True
 
 

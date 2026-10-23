@@ -70,7 +70,7 @@
 let current = null;
 function open_lb(name) {
   current = name;
-  document.getElementById('lb-img').src = '/photos/' + name;
+  document.getElementById('lb-img').src = '/preview/' + name;   // verkleinert = schnell
   document.getElementById('lb-dl').href = '/photos/' + name;
   document.getElementById('lb').style.display = 'flex';
 }

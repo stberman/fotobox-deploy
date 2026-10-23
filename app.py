@@ -14,7 +14,7 @@ from datetime import datetime
 
 from flask import (Flask, Response, jsonify, render_template, request,
                    send_from_directory, send_file, abort, redirect)
-from PIL import Image
+from PIL import Image, ImageOps
 import qrcode
 
 import config
@@ -24,6 +24,7 @@ from camera import CameraManager
 
 os.makedirs(config.PHOTO_DIR, exist_ok=True)
 os.makedirs(config.THUMB_DIR, exist_ok=True)
+os.makedirs(config.PREVIEW_DIR, exist_ok=True)
 
 app = Flask(__name__)
 cam = CameraManager()
@@ -62,19 +63,43 @@ def list_photos():
     return files
 
 
-def make_thumb(filename):
-    """Erzeugt (falls noetig) ein Thumbnail und gibt dessen Pfad zurueck."""
-    thumb_path = os.path.join(config.THUMB_DIR, filename)
+def _derived(filename, out_dir, size, quality):
+    """Verkleinerte Kopie eines Fotos (Thumbnail/Vorschau), bei Bedarf neu erzeugt.
+
+    exif_transpose: Kamera-Orientierung einrechnen, damit die Kopie (ohne EXIF)
+    genauso herum liegt wie das Original im Browser.
+    """
+    out_path = os.path.join(out_dir, filename)
     src_path = os.path.join(config.PHOTO_DIR, filename)
-    if (not os.path.exists(thumb_path)
-            or os.path.getmtime(thumb_path) < os.path.getmtime(src_path)):
+    if (not os.path.exists(out_path)
+            or os.path.getmtime(out_path) < os.path.getmtime(src_path)):
         try:
-            img = Image.open(src_path).convert("RGB")
-            img.thumbnail(config.THUMB_SIZE)
-            img.save(thumb_path, "JPEG", quality=85)
+            with Image.open(src_path) as im:
+                img = ImageOps.exif_transpose(im).convert("RGB")
+            img.thumbnail(size)
+            img.save(out_path + ".tmp", "JPEG", quality=quality, optimize=True)
+            os.replace(out_path + ".tmp", out_path)
         except Exception:
             return None
-    return thumb_path
+    return out_path
+
+
+def make_thumb(filename):
+    return _derived(filename, config.THUMB_DIR, config.THUMB_SIZE, 85)
+
+
+def make_preview(filename):
+    return _derived(filename, config.PREVIEW_DIR, config.PREVIEW_SIZE, 82)
+
+
+def _drop_derived(filename):
+    for d in (config.THUMB_DIR, config.PREVIEW_DIR):
+        p = os.path.join(d, filename)
+        if os.path.exists(p):
+            try:
+                os.remove(p)
+            except OSError:
+                pass        # wird sonst beim naechsten Aufruf neu erzeugt
 
 
 def mjpeg_part(frame):
@@ -143,16 +168,31 @@ def preview():
 _ROTATIONS = {90: Image.Transpose.ROTATE_270,    # 90 Grad im Uhrzeigersinn
               180: Image.Transpose.ROTATE_180,
               270: Image.Transpose.ROTATE_90}
+_EXIF_ORIENTATION = 0x0112
 
 
-def _rotate_file(path, degrees):
-    """Dreht die Datei um 90/180/270 Grad im Uhrzeigersinn (verlustfrei bei 90er-Schritten)."""
-    op = _ROTATIONS.get(degrees)
-    if op is None:
-        return
+def _normalize_orientation(path, degrees):
+    """Bringt die Datei in ihre endgueltige Lage und setzt EXIF-Orientation auf 1.
+
+    Zwei Quellen fuer die Drehung: der Lagesensor der Kamera (EXIF-Tag, Browser
+    drehen danach automatisch) und die Drehung des Liveviews am Tablet. Wuerde
+    man die Pixel drehen und das EXIF-Tag stehen lassen, dreht der Browser ein
+    zweites Mal -> Foto in der Galerie "nicht mehr gedreht". Darum: Kamera-Tag
+    in die Pixel einrechnen; die Tablet-Drehung nur, wenn die Kamera selbst
+    keine Lage gemeldet hat (sonst kennt sie die Lage bereits).
+    """
     with Image.open(path) as img:
-        fmt, exif = img.format, img.info.get("exif", b"")
-        img.transpose(op).save(path, format=fmt, quality=95, exif=exif)
+        exif = img.getexif()
+        cam_orient = exif.get(_EXIF_ORIENTATION, 1)
+        op = _ROTATIONS.get(degrees)
+        if cam_orient == 1 and op is None:
+            return                      # nichts zu tun, Datei bleibt unangetastet
+        fmt = img.format
+        out = ImageOps.exif_transpose(img) if cam_orient != 1 else img
+        if cam_orient == 1 and op is not None:
+            out = out.transpose(op)
+        exif[_EXIF_ORIENTATION] = 1
+        out.save(path, format=fmt, quality=95, exif=exif.tobytes())
 
 
 @app.route("/capture", methods=["POST"])
@@ -164,8 +204,7 @@ def do_capture():
     try:
         filename = cam.capture()
         path = os.path.join(config.PHOTO_DIR, filename)
-        if rotation:
-            _rotate_file(path, rotation)
+        _normalize_orientation(path, rotation)
         framed = False
         try:
             # Rahmen/Logo/Text nach der Drehung, damit sie zur Bildlage passen.
@@ -173,8 +212,10 @@ def do_capture():
         except Exception as e:                   # noqa: BLE001 - Foto ist wichtiger als der Rahmen
             app.logger.warning("Overlay fehlgeschlagen: %s", e)
         view = f"{public_base()}/foto/{filename}"
+        make_preview(filename)           # jetzt erzeugen, damit der Ergebnis-Screen sofort laedt
         return jsonify(ok=True, filename=filename, framed=framed,
-                       url=f"/photos/{filename}", view=view)
+                       url=f"/photos/{filename}", preview=f"/preview/{filename}",
+                       view=view)
     except Exception as e:
         return jsonify(ok=False, error=str(e)), 500
 
@@ -250,39 +291,7 @@ def delete_photo():
         os.remove(os.path.join(config.PHOTO_DIR, filename))
     except OSError as e:
         return jsonify(ok=False, error=str(e)), 500
-    thumb = os.path.join(config.THUMB_DIR, filename)
-    if os.path.exists(thumb):
-        try:
-            os.remove(thumb)
-        except OSError:
-            pass        # Thumbnail wird sonst beim naechsten Aufruf neu erzeugt
-    return jsonify(ok=True)
-
-
-@app.route("/rotate", methods=["POST"])
-def rotate_photo():
-    # Nur im LAN erreichbar (nicht in PUBLIC_PREFIXES -> Tunnel bekommt 403).
-    filename = request.form.get("filename", "")
-    if filename not in list_photos():
-        abort(404)
-    path = os.path.join(config.PHOTO_DIR, filename)
-    try:
-        with Image.open(path) as img:
-            fmt = img.format
-            # ROTATE_270 = 90 Grad im Uhrzeigersinn; transpose() ist fuer
-            # 90-Grad-Schritte exakt (kein Interpolations-Verlust).
-            img.transpose(Image.Transpose.ROTATE_270).save(
-                path, format=fmt, quality=95)
-    except Exception as e:
-        return jsonify(ok=False, error=str(e)), 500
-    # Thumbnail verwerfen -> wird beim naechsten Abruf in neuer Lage erzeugt.
-    thumb = os.path.join(config.THUMB_DIR, filename)
-    if os.path.exists(thumb):
-        try:
-            os.remove(thumb)
-        except OSError:
-            pass
-    make_thumb(filename)
+    _drop_derived(filename)
     return jsonify(ok=True)
 
 
@@ -455,6 +464,16 @@ def thumb(filename):
         abort(404)
     if make_thumb(filename):
         return send_from_directory(config.THUMB_DIR, filename)
+    return send_from_directory(config.PHOTO_DIR, filename)
+
+
+@app.route("/preview/<path:filename>")
+def preview_image(filename):
+    """Mittelgrosse Ansicht (max. 1600 px) - zum Anschauen; Download bleibt /photos/."""
+    if not filename.lower().endswith(config.ALLOWED_EXT):
+        abort(404)
+    if make_preview(filename):
+        return send_from_directory(config.PREVIEW_DIR, filename)
     return send_from_directory(config.PHOTO_DIR, filename)
 
 

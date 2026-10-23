@@ -277,7 +277,8 @@ async function countdown(sec){
 let currentShot = null;
 function showResult(data){
   currentShot = data.filename;
-  $('shot').src = data.url + '?t=' + Date.now();
+  // verkleinerte Vorschau (schnell); Download/QR nutzen weiter das Original
+  $('shot').src = (data.preview || data.url) + '?t=' + Date.now();
   $('qr-photo').src = '/qr.png?url=' + encodeURIComponent(data.view);
   stopFeed();
   liveScreen.classList.remove('active');
