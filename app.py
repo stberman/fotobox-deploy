@@ -18,6 +18,7 @@ from PIL import Image
 import qrcode
 
 import config
+import overlay
 import wifi
 from camera import CameraManager
 
@@ -139,12 +140,40 @@ def preview():
                     mimetype="multipart/x-mixed-replace; boundary=frame")
 
 
+_ROTATIONS = {90: Image.Transpose.ROTATE_270,    # 90 Grad im Uhrzeigersinn
+              180: Image.Transpose.ROTATE_180,
+              270: Image.Transpose.ROTATE_90}
+
+
+def _rotate_file(path, degrees):
+    """Dreht die Datei um 90/180/270 Grad im Uhrzeigersinn (verlustfrei bei 90er-Schritten)."""
+    op = _ROTATIONS.get(degrees)
+    if op is None:
+        return
+    with Image.open(path) as img:
+        fmt, exif = img.format, img.info.get("exif", b"")
+        img.transpose(op).save(path, format=fmt, quality=95, exif=exif)
+
+
 @app.route("/capture", methods=["POST"])
 def do_capture():
     try:
+        rotation = int(request.form.get("rotation", 0) or 0) % 360
+    except ValueError:
+        rotation = 0
+    try:
         filename = cam.capture()
+        path = os.path.join(config.PHOTO_DIR, filename)
+        if rotation:
+            _rotate_file(path, rotation)
+        framed = False
+        try:
+            # Rahmen/Logo/Text nach der Drehung, damit sie zur Bildlage passen.
+            framed = overlay.apply_to_file(path)
+        except Exception as e:                   # noqa: BLE001 - Foto ist wichtiger als der Rahmen
+            app.logger.warning("Overlay fehlgeschlagen: %s", e)
         view = f"{public_base()}/foto/{filename}"
-        return jsonify(ok=True, filename=filename,
+        return jsonify(ok=True, filename=filename, framed=framed,
                        url=f"/photos/{filename}", view=view)
     except Exception as e:
         return jsonify(ok=False, error=str(e)), 500
@@ -152,7 +181,8 @@ def do_capture():
 
 @app.route("/api/status")
 def api_status():
-    return jsonify(camera=cam.is_live(), count=len(list_photos()))
+    return jsonify(camera=cam.is_live(), count=len(list_photos()),
+                   overlay=overlay.load_settings().get("enabled", False))
 
 
 class _ZipSink:
@@ -247,6 +277,85 @@ def rotate_photo():
         except OSError:
             pass
     make_thumb(filename)
+    return jsonify(ok=True)
+
+
+# --------------------------------------------------------------------------
+# Routen: Rahmen / Overlay (nur LAN)
+# --------------------------------------------------------------------------
+@app.route("/rahmen")
+def rahmen():
+    return render_template("rahmen.html")
+
+
+@app.route("/overlays/<path:filename>")
+def overlay_asset(filename):
+    if not filename.lower().endswith(".png"):
+        abort(404)
+    return send_from_directory(config.OVERLAY_DIR, filename)
+
+
+@app.route("/api/overlay/settings", methods=["GET", "POST"])
+def api_overlay_settings():
+    try:
+        if request.method == "POST":
+            settings = overlay.save_settings(request.form.to_dict())
+        else:
+            settings = overlay.load_settings()
+        return jsonify(ok=True, settings=settings, assets=overlay.list_assets())
+    except Exception as e:                       # noqa: BLE001
+        return jsonify(ok=False, error=str(e)), 500
+
+
+@app.route("/api/overlay/preview.jpg")
+def api_overlay_preview():
+    # Vorschau mit den Werten aus der Query (ungespeichert), gerendert auf dem
+    # letzten Foto oder einem Platzhalter.
+    settings = dict(overlay.DEFAULTS)
+    settings.update(overlay.load_settings())
+    for k, v in request.args.items():
+        if k in overlay.DEFAULTS:
+            kind = type(overlay.DEFAULTS[k])
+            if kind is bool:
+                v = v.lower() in ("1", "true", "on", "yes")
+            elif kind is float:
+                try:
+                    v = float(v)
+                except ValueError:
+                    continue
+            settings[k] = v
+    photos = list_photos()
+    base = os.path.join(config.PHOTO_DIR, photos[0]) if photos else None
+    try:
+        img = overlay.preview(settings, base, width=1200)
+    except Exception as e:                       # noqa: BLE001
+        return jsonify(ok=False, error=str(e)), 500
+    buf = io.BytesIO()
+    img.save(buf, "JPEG", quality=82)
+    buf.seek(0)
+    resp = send_file(buf, mimetype="image/jpeg")
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+@app.route("/api/overlay/upload", methods=["POST"])
+def api_overlay_upload():
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify(ok=False, error="Keine Datei ausgewaehlt."), 400
+    try:
+        name = overlay.save_upload(f, f.filename, request.form.get("kind", "frame"))
+    except ValueError as e:
+        return jsonify(ok=False, error=str(e)), 400
+    return jsonify(ok=True, name=name)
+
+
+@app.route("/api/overlay/delete", methods=["POST"])
+def api_overlay_delete():
+    try:
+        overlay.delete_asset(request.form.get("name", ""))
+    except ValueError as e:
+        return jsonify(ok=False, error=str(e)), 404
     return jsonify(ok=True)
 
 

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fotobox · Rahmen</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; font-family: system-ui, sans-serif; background: #000; color: #fff; }
+  header { display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: #111; position: sticky; top: 0; z-index: 5; }
+  header a { color: #fff; text-decoration: none; font-size: 22px; }
+  header h1 { margin: 0; font-size: 20px; flex: 1; }
+  main { padding: 16px; max-width: 1100px; margin: 0 auto; display: grid; gap: 16px; grid-template-columns: 1fr; }
+  @media (min-width: 900px) { main { grid-template-columns: 1fr 1fr; } #preview-card { grid-column: 1 / -1; } }
+  .card { background: #161616; border-radius: 14px; padding: 16px; }
+  .card h2 { margin: 0 0 10px; font-size: 17px; color: #ddd; }
+  label { display: block; font-size: 13px; color: #aaa; margin: 10px 0 4px; }
+  input[type=text], select {
+    width: 100%; padding: 11px; font-size: 16px; border-radius: 10px; border: 1px solid #444; background: #0d0d0d; color: #fff;
+  }
+  input[type=range] { width: 100%; }
+  .check { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 15px; color: #ddd; }
+  .check input { width: 20px; height: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+  .tile { background: #0d0d0d; border: 2px solid #333; border-radius: 10px; padding: 6px; cursor: pointer; text-align: center; font-size: 13px; position: relative; }
+  .tile.sel { border-color: #27ae60; }
+  .tile img { width: 100%; aspect-ratio: 3/2; object-fit: contain; background: repeating-conic-gradient(#333 0 25%, #222 0 50%) 0 0 / 16px 16px; border-radius: 6px; display: block; }
+  .tile .del { position: absolute; top: 2px; right: 4px; color: #e74c3c; font-size: 16px; background: none; border: none; padding: 2px 5px; margin: 0; }
+  button { padding: 11px 16px; font-size: 15px; font-weight: 700; border: none; border-radius: 12px; color: #fff; cursor: pointer; margin-top: 10px; }
+  .primary { background: #27ae60; width: 100%; font-size: 17px; padding: 14px; }
+  .secondary { background: #2d2d2d; }
+  .onoff { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #1d1d1d; padding: 12px 14px; border-radius: 12px; }
+  .onoff b { font-size: 17px; }
+  .onoff button { margin: 0; min-width: 120px; }
+  #preview { width: 100%; border-radius: 10px; background: #000; display: block; min-height: 120px; }
+  .hint { color: #999; font-size: 13px; line-height: 1.4; margin: 6px 0 0; }
+  #msg { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); max-width: 90vw;
+    padding: 12px 18px; border-radius: 10px; font-size: 15px; display: none; z-index: 10; background: #c0392b; }
+  #msg.ok { background: #1e5631; }
+  .row2 { display: flex; gap: 10px; } .row2 > * { flex: 1; }
+</style>
+</head>
+<body>
+<header>
+  <a href="/" title="Zurück zur Kamera">◀</a>
+  <h1>Rahmen &amp; Beschriftung</h1>
+  <a href="/wlan" style="font-size:14px;color:#ccc">⚙ WLAN</a>
+</header>
+<main>
+
+  <div class="card" id="preview-card">
+    <div class="onoff">
+      <div><b id="state-txt">…</b><div class="hint">Wird nach jeder Aufnahme automatisch aufs Foto gelegt. Das Original bleibt in photos/originals/.</div></div>
+      <button id="btn-onoff" class="secondary" onclick="toggleEnabled()">…</button>
+    </div>
+    <h2 style="margin-top:14px">Vorschau <span class="hint" style="display:inline">(auf dem letzten Foto, sonst Platzhalter)</span></h2>
+    <img id="preview" alt="Vorschau">
+  </div>
+
+  <div class="card">
+    <h2>Rahmen</h2>
+    <div class="grid" id="frames"></div>
+    <label>Eigenen Rahmen hochladen (PNG mit Transparenz, Querformat 3:2 empfohlen)</label>
+    <input type="file" id="up-frame" accept="image/png" onchange="upload(this,'frame')">
+  </div>
+
+  <div class="card">
+    <h2>Logo</h2>
+    <div class="grid" id="logos"></div>
+    <div class="row2">
+      <div><label for="logo_pos">Position</label>
+        <select id="logo_pos" name="logo_pos">
+          <option value="tl">oben links</option><option value="tr">oben rechts</option>
+          <option value="bl">unten links</option><option value="br">unten rechts</option>
+        </select></div>
+      <div><label for="logo_scale">Größe (<span id="logo_scale_v"></span> % der Breite)</label>
+        <input type="range" id="logo_scale" name="logo_scale" min="0.06" max="0.4" step="0.01"></div>
+    </div>
+    <label>Logo hochladen (PNG, am besten transparent)</label>
+    <input type="file" id="up-logo" accept="image/png" onchange="upload(this,'logo')">
+  </div>
+
+  <div class="card">
+    <h2>Text &amp; Datum</h2>
+    <label for="text">Veranstaltung / Text (leer = kein Text)</label>
+    <input type="text" id="text" name="text" maxlength="80" placeholder="z. B. Sommerfest 2026">
+    <div class="check"><input type="checkbox" id="show_date" name="show_date"><label for="show_date" style="margin:0">Datum anzeigen</label></div>
+    <div class="row2">
+      <div><label for="text_pos">Position</label>
+        <select id="text_pos" name="text_pos"><option value="bottom">unten</option><option value="top">oben</option></select></div>
+      <div><label for="text_color">Farbe</label>
+        <select id="text_color" name="text_color"><option value="light">hell (weiß)</option><option value="dark">dunkel (schwarz)</option></select></div>
+    </div>
+    <div class="check"><input type="checkbox" id="text_bg" name="text_bg"><label for="text_bg" style="margin:0">Balken hinter dem Text</label></div>
+    <label for="text_size">Schriftgröße</label>
+    <input type="range" id="text_size" name="text_size" min="0.02" max="0.1" step="0.005">
+    <label for="text_offset">Abstand vom Rand</label>
+    <input type="range" id="text_offset" name="text_offset" min="0" max="0.2" step="0.005">
+  </div>
+
+  <div class="card" style="grid-column: 1 / -1">
+    <button class="primary" onclick="save(true)">💾 Speichern</button>
+    <p class="hint">Änderungen werden sofort in der Vorschau gezeigt; „Speichern“ macht sie für die nächsten Fotos wirksam.</p>
+  </div>
+</main>
+<div id="msg"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let S = null, assets = [];
+const FIELDS = ['text','show_date','text_pos','text_color','text_bg','text_size','text_offset','logo_pos','logo_scale'];
+
+function showMsg(t, ok){ const m=$('msg'); m.textContent=t; m.className = ok?'ok':''; m.style.display='block';
+  clearTimeout(showMsg.t); showMsg.t = setTimeout(()=>m.style.display='none', 5000); }
+
+async function api(url, data){
+  const opt = data ? { method:'POST', body: data instanceof FormData ? data :
+    Object.entries(data).reduce((f,[k,v])=>(f.append(k,v),f), new FormData()) } : {};
+  const r = await fetch(url, opt); const d = await r.json();
+  if (!d.ok) throw new Error(d.error || 'unbekannter Fehler'); return d;
+}
+
+function collect(){
+  const out = { frame: S.frame || '', logo: S.logo || '' };
+  FIELDS.forEach(k => { const el = $(k); out[k] = el.type === 'checkbox' ? (el.checked ? 1 : 0) : el.value; });
+  return out;
+}
+function fill(){
+  FIELDS.forEach(k => { const el = $(k); if (el.type === 'checkbox') el.checked = !!S[k]; else el.value = S[k]; });
+  $('logo_scale_v').textContent = Math.round(S.logo_scale * 100);
+  $('state-txt').textContent = S.enabled ? 'Rahmen: EIN' : 'Rahmen: AUS';
+  const b = $('btn-onoff'); b.textContent = S.enabled ? 'Ausschalten' : 'Einschalten';
+  b.style.background = S.enabled ? '#c0392b' : '#27ae60';
+}
+
+function renderTiles(){
+  const frames = assets.filter(a => a.kind !== 'logo'), logos = assets.filter(a => a.kind === 'logo');
+  const mk = (container, list, key, noneLabel) => {
+    container.innerHTML = '';
+    const none = document.createElement('div');
+    none.className = 'tile' + (!S[key] ? ' sel' : '');
+    none.innerHTML = `<div style="aspect-ratio:3/2;display:flex;align-items:center;justify-content:center;color:#888">∅</div>${noneLabel}`;
+    none.onclick = () => { S[key] = ''; renderTiles(); refreshPreview(); };
+    container.appendChild(none);
+    list.forEach(a => {
+      const t = document.createElement('div');
+      t.className = 'tile' + (S[key] === a.name ? ' sel' : '');
+      t.innerHTML = `<img src="/overlays/${encodeURIComponent(a.name)}" alt=""><span></span><button class="del" title="Löschen">✕</button>`;
+      t.querySelector('span').textContent = a.title;
+      t.onclick = () => {
+        S[key] = a.name;
+        if (key === 'frame' && a.recommend) { Object.assign(S, a.recommend); fill(); }
+        renderTiles(); refreshPreview();
+      };
+      t.querySelector('.del').onclick = async (ev) => {
+        ev.stopPropagation();
+        if (!confirm(`„${a.title}“ löschen?`)) return;
+        try { await api('/api/overlay/delete', { name: a.name }); if (S[key] === a.name) S[key] = ''; await loadAll(); }
+        catch(e){ showMsg(e.message); }
+      };
+      container.appendChild(t);
+    });
+  };
+  mk($('frames'), frames, 'frame', 'kein Rahmen');
+  mk($('logos'), logos, 'logo', 'kein Logo');
+}
+
+let pvTimer = null;
+function refreshPreview(){
+  clearTimeout(pvTimer);
+  pvTimer = setTimeout(() => {
+    const q = new URLSearchParams(collect()); q.set('t', Date.now());
+    $('preview').src = '/api/overlay/preview.jpg?' + q.toString();
+  }, 250);
+}
+
+async function save(announce){
+  try {
+    const d = await api('/api/overlay/settings', collect());
+    S = Object.assign(S, d.settings); fill();
+    if (announce) showMsg('Gespeichert.', true);
+  } catch(e){ showMsg(e.message); }
+}
+
+async function toggleEnabled(){
+  try {
+    const data = collect(); data.enabled = S.enabled ? 0 : 1;
+    const d = await api('/api/overlay/settings', data);
+    S = Object.assign(S, d.settings); fill();
+    showMsg(S.enabled ? 'Rahmen wird ab jetzt auf neue Fotos gelegt.' : 'Rahmen aus.', true);
+  } catch(e){ showMsg(e.message); }
+}
+
+async function upload(input, kind){
+  if (!input.files.length) return;
+  const fd = new FormData(); fd.append('file', input.files[0]); fd.append('kind', kind);
+  try {
+    const d = await api('/api/overlay/upload', fd);
+    S[kind] = d.name; await loadAll(); showMsg('Hochgeladen: ' + d.name, true);
+  } catch(e){ showMsg(e.message); }
+  input.value = '';
+}
+
+async function loadAll(){
+  const d = await api('/api/overlay/settings');
+  S = Object.assign(d.settings, S ? { frame: S.frame, logo: S.logo } : {});
+  assets = d.assets;
+  fill(); renderTiles(); refreshPreview();
+}
+
+document.querySelectorAll('input, select').forEach(el => {
+  if (el.type === 'file') return;
+  el.addEventListener('input', () => { if (el.id === 'logo_scale') $('logo_scale_v').textContent = Math.round(el.value * 100); refreshPreview(); });
+});
+loadAll().catch(e => showMsg('Laden fehlgeschlagen: ' + e.message));
+</script>
+</body>
+</html>

@@ -43,3 +43,8 @@ AP_IP = "10.42.0.1"              # feste Adresse des Pi im eigenen Hotspot
 AP_SUBNET_PREFIX = "10.42.0."
 WIFI_CONNECT_TIMEOUT = 45        # s, die ein Verbindungsversuch maximal dauern darf
 NMCLI = "/usr/bin/nmcli"
+
+# --- Rahmen / Overlay ------------------------------------------------------
+OVERLAY_DIR = os.path.join(BASE_DIR, "overlays")              # Rahmen- und Logo-PNGs
+OVERLAY_SETTINGS = os.path.join(BASE_DIR, "overlay_settings.json")  # aktive Einstellungen (nicht im Repo)
+ORIGINALS_DIR = os.path.join(PHOTO_DIR, "originals")          # unveraenderte Aufnahmen

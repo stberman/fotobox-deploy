@@ -21,3 +21,7 @@ probefoto.jpg
 .DS_Store
 Thumbs.db
 .vscode/
+
+# --- Rahmen/Overlay ---
+overlay_settings.json   # aktive Rahmen-Einstellungen (geraetespezifisch)
+photos/originals/

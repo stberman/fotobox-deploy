@@ -87,7 +87,7 @@ c_info "Systempakete installieren ..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq git curl gphoto2 python3 python3-venv python3-pil \
-  network-manager dnsmasq-base avahi-daemon nftables rfkill >/dev/null
+  network-manager dnsmasq-base avahi-daemon nftables rfkill fonts-dejavu-core >/dev/null
 c_ok "Systempakete"
 
 # ---------------------------------------------------------------------------
@@ -126,8 +126,8 @@ if [ -f "$GVFS" ]; then
   mv "$GVFS" "$GVFS.disabled"
   c_ok "gvfs-Kamera-Monitor deaktiviert"
 fi
-mkdir -p "$DIR/photos" "$DIR/static/thumbs" "$STATE_DIR"
-chown -R "$FB_USER:" "$DIR/photos" "$DIR/static" "$STATE_DIR"
+mkdir -p "$DIR/photos/originals" "$DIR/static/thumbs" "$DIR/overlays" "$STATE_DIR"
+chown -R "$FB_USER:" "$DIR/photos" "$DIR/static" "$DIR/overlays" "$STATE_DIR"
 c_ok "Gruppen (plugdev/netdev/video), Verzeichnisse"
 
 # ---------------------------------------------------------------------------
@@ -223,6 +223,7 @@ echo "================  Fertig!  =========================="
 echo "  Tablet / Steuerung :  http://$CUR_HOST.local        (oder $IPS)"
 echo "  Gaeste-Galerie     :  http://$CUR_HOST.local/galerie"
 echo "  WLAN-Einstellungen :  http://$CUR_HOST.local/wlan"
+echo "  Rahmen/Logo/Text   :  http://$CUR_HOST.local/rahmen"
 echo
 echo "  Kein bekanntes WLAN in Reichweite?  Der Pi oeffnet nach ca. 45 s"
 echo "  das WLAN '$(nmcli -g 802-11-wireless.ssid con show "$AP_CON")' -> verbinden -> Seite oeffnet sich"

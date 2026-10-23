@@ -14,6 +14,8 @@ Live-Vorschau), Gäste rufen ihre Fotos über eine Galerie bzw. einen QR-Code ab
 - **WLAN-Einrichtung wie beim Shelly:** kein bekanntes WLAN → der Pi öffnet sein eigenes WLAN
   „Fotobox“ mit einer Einstellungsseite
 - **Autark-Modus:** eigenes WLAN dauerhaft, ohne Internet und Tunnel (für Orte ohne WLAN)
+- **Rahmen & Beschriftung:** Rahmen, Logo, Veranstaltungs-Text und Datum werden automatisch ins
+  fertige Foto gelegt (5 Rahmen dabei, eigene PNGs hochladbar); Originale bleiben erhalten
 - **SD-Karten-Backup**: jedes Foto bleibt zusätzlich auf der Kamera-Karte
 
 ## Architektur
@@ -30,8 +32,11 @@ Canon EOS M50 ──USB──> Raspberry Pi 4B/5 ──WLAN──> Tablet / Hand
 | `app.py` | Flask-Webserver, Routen (Web-Schicht) |
 | `camera.py` | `CameraManager`: Liveview-Stream + Aufnahme (Kamera-Schicht) |
 | `wifi.py` | WLAN-Verwaltung über NetworkManager (`nmcli`) |
+| `overlay.py` | Rahmen/Logo/Text auf das Foto legen |
+| `overlays/` | mitgelieferte Rahmen (PNG + .json mit Empfehlungen); eigene Dateien hier ablegen |
+| `tools/make_frames.py` | erzeugt die Standard-Rahmen neu |
 | `config.py` | zentrale Konstanten & Tuning-Parameter |
-| `templates/` | HTML: `control.html` (Tablet), `gallery.html`, `foto.html`, `wlan.html` |
+| `templates/` | HTML: `control.html` (Tablet), `gallery.html`, `foto.html`, `wlan.html`, `rahmen.html` |
 | `tunnel.sh` | startet den Cloudflare-Tunnel, schreibt die URL in `public_url.txt` |
 | `system/` | systemd-Dienste, WLAN-Check-Skript, NetworkManager-Dateien, sudo-Regel |
 
@@ -82,6 +87,7 @@ curl -fsSL https://raw.githubusercontent.com/stberman/fotobox-deploy/main/instal
 - **Tablet (Steuerung):** `http://fotobox.local` (oder `http://<pi-ip>`; Port `:5000` geht ebenfalls)
 - **Galerie (Gäste):** `http://fotobox.local/galerie`
 - **WLAN-Einstellungen:** `http://fotobox.local/wlan` (auch über „⚙ WLAN“ oben links im Bedien-UI)
+- **Rahmen & Beschriftung:** `http://fotobox.local/rahmen` (Link „🖼 Rahmen“ im Bedien-UI)
 
 ---
 
@@ -114,6 +120,21 @@ Auf `…/wlan` → **Autark-Modus einschalten**. Der Pi macht dann *immer* sein 
 - Ausschalten: wieder auf `…/wlan` → „Ausschalten“; der Pi verbindet sich mit bekannten WLANs
 
 Die Einstellung überlebt Neustarts (Datei `/var/lib/fotobox/autark`).
+
+## Rahmen, Logo und Beschriftung
+
+Auf `http://fotobox.local/rahmen` (oder über „🖼 Rahmen“ im Bedien-UI):
+- **Rahmen** auswählen (Weiß, Polaroid, Schwarz, Gold, Party) oder ein eigenes PNG mit
+  Transparenz hochladen – Querformat 3:2 (z. B. 3000 × 2000 px). Bei Hochformat-Fotos wird
+  der Rahmen automatisch mitgedreht.
+- **Logo** (PNG, am besten transparent) hochladen, Ecke und Größe wählen.
+- **Text** (z. B. Name der Veranstaltung) und **Datum** mit Position, Farbe, Balken, Größe.
+- Live-**Vorschau** auf dem letzten Foto; **Einschalten** macht es für alle weiteren Aufnahmen
+  wirksam, Status steht im Bedien-UI („Rahmen: ein/aus“).
+
+Das unveränderte Original jeder Aufnahme liegt in `~/fotobox/photos/originals/`, die Galerie
+und die QR-Downloads zeigen das Foto mit Rahmen. Die Standard-Rahmen lassen sich mit
+`python tools/make_frames.py` neu erzeugen (Anpassen des Skripts für eigene Varianten).
 
 ---
 
